@@ -118,4 +118,7 @@ DEFAULT_CONFIG = _apply_env_overrides({
         ".AX":  "^AXJO",    # Australia (ASX 200)
         "":     "SPY",      # default for US-listed tickers (no suffix)
     },
+    # CCXT (crypto exchange) data source configuration
+    "ccxt_exchange": "okx",       # CCXT exchange id, e.g. "okx", "binance", "bybit"
+    "ccxt_symbol": "",            # CCXT trading pair, e.g. "BTC/USDT". Empty = use symbol arg.
 })
