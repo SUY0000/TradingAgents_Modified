@@ -7,7 +7,8 @@ def get_indicator(
     look_back_days: int,
     interval: str = "daily",
     time_period: int = 14,
-    series_type: str = "close"
+    series_type: str = "close",
+    **kwargs
 ) -> str:
     """
     Returns Alpha Vantage technical indicator values over a time window.
