@@ -358,3 +358,48 @@ def ask_output_language() -> str:
         ).ask().strip()
 
     return choice
+
+
+def select_technical_data_source() -> str:
+    """Select the data source for technical/market analysis.
+
+    Only the technical data source (OHLCV + indicators) is affected;
+    fundamentals and news remain on their default vendor.
+    """
+    choice = questionary.select(
+        "Select Your [Technical Data Source]:",
+        choices=[
+            questionary.Choice("yfinance - Traditional financial data (stocks, ETFs, etc.)", "yfinance"),
+            questionary.Choice("ccxt - Cryptocurrency exchange data (default: OKX)", "ccxt"),
+        ],
+        instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
+        style=questionary.Style([
+            ("selected", "fg:cyan noinherit"),
+            ("highlighted", "fg:cyan noinherit"),
+            ("pointer", "fg:cyan noinherit"),
+        ]),
+    ).ask()
+
+    if choice is None:
+        console.print("\n[red]No technical data source selected. Exiting...[/red]")
+        exit(1)
+
+    return choice
+
+
+def get_ccxt_symbol() -> str:
+    """Prompt the user to enter a CCXT-standard trading pair name."""
+    symbol = questionary.text(
+        "Enter CCXT trading pair (e.g. BTC/USDT, ETH/USDT, SOL/USDT):",
+        validate=lambda x: len(x.strip()) > 0 or "Please enter a valid trading pair.",
+        style=questionary.Style([
+            ("text", "fg:green"),
+            ("highlighted", "noinherit"),
+        ]),
+    ).ask()
+
+    if not symbol:
+        console.print("\n[red]No trading pair provided. Exiting...[/red]")
+        exit(1)
+
+    return symbol.strip().upper()

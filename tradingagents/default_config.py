@@ -47,4 +47,7 @@ DEFAULT_CONFIG = {
     "tool_vendors": {
         # Example: "get_stock_data": "alpha_vantage",  # Override category default
     },
+    # CCXT (crypto exchange) data source configuration
+    "ccxt_exchange": "okx",       # CCXT exchange id, e.g. "okx", "binance", "bybit"
+    "ccxt_symbol": "",            # CCXT trading pair, e.g. "BTC/USDT". Empty = use symbol arg.
 }
