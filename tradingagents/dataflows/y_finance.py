@@ -10,6 +10,7 @@ def get_YFin_data_online(
     symbol: Annotated[str, "ticker symbol of the company"],
     start_date: Annotated[str, "Start date in yyyy-mm-dd format"],
     end_date: Annotated[str, "End date in yyyy-mm-dd format"],
+    **kwargs
 ):
 
     datetime.strptime(start_date, "%Y-%m-%d")
@@ -54,6 +55,7 @@ def get_stock_stats_indicators_window(
         str, "The current trading date you are trading on, YYYY-mm-dd"
     ],
     look_back_days: Annotated[int, "how many days to look back"],
+    **kwargs
 ) -> str:
 
     best_ind_params = {
@@ -247,7 +249,8 @@ def get_stockstats_indicator(
 
 def get_fundamentals(
     ticker: Annotated[str, "ticker symbol of the company"],
-    curr_date: Annotated[str, "current date (not used for yfinance)"] = None
+    curr_date: Annotated[str, "current date (not used for yfinance)"] = None,
+    **kwargs
 ):
     """Get company fundamentals overview from yfinance."""
     try:
@@ -305,7 +308,8 @@ def get_fundamentals(
 def get_balance_sheet(
     ticker: Annotated[str, "ticker symbol of the company"],
     freq: Annotated[str, "frequency of data: 'annual' or 'quarterly'"] = "quarterly",
-    curr_date: Annotated[str, "current date in YYYY-MM-DD format"] = None
+    curr_date: Annotated[str, "current date in YYYY-MM-DD format"] = None,
+    **kwargs
 ):
     """Get balance sheet data from yfinance."""
     try:
@@ -337,7 +341,8 @@ def get_balance_sheet(
 def get_cashflow(
     ticker: Annotated[str, "ticker symbol of the company"],
     freq: Annotated[str, "frequency of data: 'annual' or 'quarterly'"] = "quarterly",
-    curr_date: Annotated[str, "current date in YYYY-MM-DD format"] = None
+    curr_date: Annotated[str, "current date in YYYY-MM-DD format"] = None,
+    **kwargs
 ):
     """Get cash flow data from yfinance."""
     try:
@@ -369,7 +374,8 @@ def get_cashflow(
 def get_income_statement(
     ticker: Annotated[str, "ticker symbol of the company"],
     freq: Annotated[str, "frequency of data: 'annual' or 'quarterly'"] = "quarterly",
-    curr_date: Annotated[str, "current date in YYYY-MM-DD format"] = None
+    curr_date: Annotated[str, "current date in YYYY-MM-DD format"] = None,
+    **kwargs
 ):
     """Get income statement data from yfinance."""
     try:
@@ -399,7 +405,8 @@ def get_income_statement(
 
 
 def get_insider_transactions(
-    ticker: Annotated[str, "ticker symbol of the company"]
+    ticker: Annotated[str, "ticker symbol of the company"],
+    **kwargs
 ):
     """Get insider transactions data from yfinance."""
     try:

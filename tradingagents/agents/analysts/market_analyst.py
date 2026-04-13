@@ -44,7 +44,21 @@ Volatility Indicators:
 Volume-Based Indicators:
 - vwma: VWMA: A moving average weighted by volume. Usage: Confirm trends by integrating price action with volume data. Tips: Watch for skewed results from volume spikes; use in combination with other volume analyses.
 
-- Select indicators that provide diverse and complementary information. Avoid redundancy (e.g., do not select both rsi and stochrsi). Also briefly explain why they are suitable for the given market context. When you tool call, please use the exact name of the indicators provided above as they are defined parameters, otherwise your call will fail. Please make sure to call get_stock_data first to retrieve the CSV that is needed to generate indicators. Then use get_indicators with the specific indicator names. Write a very detailed and nuanced report of the trends you observe. Provide specific, actionable insights with supporting evidence to help traders make informed decisions."""
+- Select indicators that provide diverse and complementary information. Avoid redundancy (e.g., do not select both rsi and stochrsi). Also briefly explain why they are suitable for the given market context. When you tool call, please use the exact name of the indicators provided above as they are defined parameters, otherwise your call will fail. Please make sure to call get_stock_data first to retrieve the CSV that is needed to generate indicators. Then use get_indicators with the specific indicator names. For cryptocurrencies (symbol contains '/', e.g., BTC/USDT), you must fetch data for multiple timeframes (1h, 4h, 1d, 1w) using the get_stock_data tool and call get_indicators for each timeframe to perform multi-timeframe analysis. For other assets, it is also recommended to analyze multiple timeframes when possible to gain a comprehensive market perspective.
+
+**Multi-Timeframe Analysis Requirements:**
+1. **Data Collection**: For each required timeframe (1h, 4h, 1d, 1w for cryptocurrencies), call get_stock_data with the appropriate timeframe parameter, then call get_indicators for the same timeframe.
+2. **Cross-Timeframe Comparison**: Analyze trends, support/resistance levels, and technical indicator signals across different timeframes. Identify:
+   - **Trend Resonance**: Whether trends align across multiple timeframes (e.g., bullish on daily, 4h, and 1h charts).
+   - **Key Level Convergence**: Where support/resistance levels coincide across timeframes, indicating stronger significance.
+   - **Indicator Consistency**: Whether signals from indicators like RSI, MACD, moving averages are consistent or conflicting across timeframes.
+3. **Multi-Timeframe Synthesis**: Integrate insights from all analyzed timeframes to form a comprehensive market view. Assess:
+   - **Primary Trend**: Determine the dominant trend based on higher timeframes (e.g., 1d, 1w).
+   - **Momentum Context**: Use lower timeframes (e.g., 1h, 4h) to identify entry/exit timing within the primary trend.
+   - **Risk Assessment**: Identify potential conflicts between timeframes that may indicate market indecision or reversal risk.
+4. **Report Integration**: Your report must include a dedicated "Multi-Timeframe Analysis" section that summarizes findings from all timeframes, highlights resonance patterns, and provides integrated trading insights.
+
+Write a very detailed and nuanced report of the trends you observe. Provide specific, actionable insights with supporting evidence to help traders make informed decisions."""
             + """ Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."""
             + get_language_instruction()
         )

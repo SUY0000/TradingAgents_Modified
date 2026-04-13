@@ -4,7 +4,8 @@ from .alpha_vantage_common import _make_api_request, _filter_csv_by_date_range
 def get_stock(
     symbol: str,
     start_date: str,
-    end_date: str
+    end_date: str,
+    **kwargs
 ) -> str:
     """
     Returns raw daily OHLCV values, adjusted close values, and historical split/dividend events

@@ -8,6 +8,7 @@ def get_indicators(
     indicator: Annotated[str, "technical indicator to get the analysis and report of"],
     curr_date: Annotated[str, "The current trading date you are trading on, YYYY-mm-dd"],
     look_back_days: Annotated[int, "how many days to look back"] = 30,
+    timeframe: Annotated[str, "Timeframe for data (e.g., '1d', '4h', '1h'). Default is '1d'"] = "1d",
 ) -> str:
     """
     Retrieve a single technical indicator for a given ticker symbol.
@@ -17,6 +18,7 @@ def get_indicators(
         indicator (str): A single technical indicator name, e.g. 'rsi', 'macd'. Call this tool once per indicator.
         curr_date (str): The current trading date you are trading on, YYYY-mm-dd
         look_back_days (int): How many days to look back, default is 30
+        timeframe (str): Timeframe for data (e.g., '1d', '4h', '1h'). Default is '1d'
     Returns:
         str: A formatted dataframe containing the technical indicators for the specified ticker symbol and indicator.
     """
@@ -26,7 +28,7 @@ def get_indicators(
     results = []
     for ind in indicators:
         try:
-            results.append(route_to_vendor("get_indicators", symbol, ind, curr_date, look_back_days))
+            results.append(route_to_vendor("get_indicators", symbol, ind, curr_date, look_back_days, timeframe=timeframe))
         except ValueError as e:
             results.append(str(e))
     return "\n\n".join(results)

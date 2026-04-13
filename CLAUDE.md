@@ -131,3 +131,10 @@ print(decision)  # One of: BUY, OVERWEIGHT, HOLD, UNDERWEIGHT, SELL
 - CCXT vendor reads `ccxt_symbol` from config (not the `symbol` function arg) — programmatic users must set `config["ccxt_symbol"]` when using CCXT, or the raw ticker will be passed to the exchange (likely invalid).
 - CCXT cache key (`{symbol}-CCXT-data-{dates}.csv`) does not include exchange name — switching `ccxt_exchange` requires cache cleanup to avoid stale data.
 - Adding new CLI steps requires manual renumbering of all subsequent steps (step numbers are hardcoded strings in `cli/main.py`).
+
+### Development Workflow
+
+- **RTK工具使用**: 项目配置了RTK (Rust Token Killer)用于token优化。使用`rtk read`、`rtk grep`、`rtk find`代替内置的Read、Grep、Glob工具以节省token。
+- **供应商参数传递**: 供应商实现使用`**kwargs`接受额外参数，确保向后兼容。新参数可安全添加到工具层，非相关供应商会忽略这些参数。
+- **工具层修改模式**: 修改工具函数时，添加参数并通过`route_to_vendor()`传递。CCXT支持`timeframe`参数用于多时间周期数据获取。
+- **测试结构**: `tests/`目录包含测试模板和fixtures，但无完整测试运行器。参考`test_ccxt_data_template.py`作为测试模板。
