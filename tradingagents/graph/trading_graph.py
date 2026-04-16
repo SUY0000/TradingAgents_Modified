@@ -154,15 +154,33 @@ class TradingAgentsGraph:
 
     def _create_tool_nodes(self) -> Dict[str, ToolNode]:
         """Create tool nodes for different data sources using abstract methods."""
+        vendors = self.config.get("data_vendors", {})
+        is_crypto = (
+            vendors.get("core_stock_apis") == "ccxt"
+            and vendors.get("technical_indicators") == "ccxt"
+        )
+        market_tools = [get_stock_data, get_indicators]
+        if is_crypto:
+            from tradingagents.agents.utils.crypto_market_tools import (
+                get_crypto_funding_rate,
+                get_crypto_open_interest,
+                get_crypto_long_short_ratio,
+                get_crypto_taker_volume,
+                get_crypto_elite_long_short_ratio,
+                get_crypto_aggregated_oi_volume,
+                get_crypto_put_call_ratio,
+            )
+            market_tools += [
+                get_crypto_funding_rate,
+                get_crypto_open_interest,
+                get_crypto_long_short_ratio,
+                get_crypto_taker_volume,
+                get_crypto_elite_long_short_ratio,
+                get_crypto_aggregated_oi_volume,
+                get_crypto_put_call_ratio,
+            ]
         return {
-            "market": ToolNode(
-                [
-                    # Core stock data tools
-                    get_stock_data,
-                    # Technical indicators
-                    get_indicators,
-                ]
-            ),
+            "market": ToolNode(market_tools),
             "social": ToolNode(
                 [
                     # News tools for social media analysis

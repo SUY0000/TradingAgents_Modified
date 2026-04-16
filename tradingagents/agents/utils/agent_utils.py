@@ -24,8 +24,8 @@ def get_language_instruction() -> str:
     """Return a prompt instruction for the configured output language.
 
     Returns empty string when English (default), so no extra tokens are used.
-    Only applied to user-facing agents (analysts, portfolio manager).
-    Internal debate agents stay in English for reasoning quality.
+    Applied to all user-facing output nodes: analysts, research_manager, trader, portfolio_manager.
+    Internal debate agents (bull/bear researchers, risk debators) stay in English for reasoning quality.
     """
     from tradingagents.dataflows.config import get_config
     lang = get_config().get("output_language", "English")

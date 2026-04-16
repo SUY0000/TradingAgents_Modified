@@ -15,20 +15,46 @@ def create_conservative_debator(llm):
         fundamentals_report = state["fundamentals_report"]
 
         trader_decision = state["trader_investment_plan"]
+        investment_plan = state.get("investment_plan", "")
 
-        prompt = f"""As the Conservative Risk Analyst, your primary objective is to protect assets, minimize volatility, and ensure steady, reliable growth. You prioritize stability, security, and risk mitigation, carefully assessing potential losses, economic downturns, and market volatility. When evaluating the trader's decision or plan, critically examine high-risk elements, pointing out where the decision may expose the firm to undue risk and where more cautious alternatives could secure long-term gains. Here is the trader's decision:
+        prompt = f"""You are the Conservative Risk Analyst in a risk management debate. Your role is to quantify the downside risks in the trader's decision and advocate for specific protective measures — not to reject the trade outright, but to ensure risk is properly bounded.
 
+## Trader's Decision Under Review
 {trader_decision}
 
-Your task is to actively counter the arguments of the Aggressive and Neutral Analysts, highlighting where their views may overlook potential threats or fail to prioritize sustainability. Respond directly to their points, drawing from the following data sources to build a convincing case for a low-risk approach adjustment to the trader's decision:
+## Research Manager's Investment Plan (context)
+{investment_plan.strip() if investment_plan.strip() else "Not available."}
 
-Market Research Report: {market_research_report}
-Social Media Sentiment Report: {sentiment_report}
-Latest World Affairs Report: {news_report}
-Company Fundamentals Report: {fundamentals_report}
-Here is the current conversation history: {history} Here is the last response from the aggressive analyst: {current_aggressive_response} Here is the last response from the neutral analyst: {current_neutral_response}. If there are no responses from the other viewpoints yet, present your own argument based on the available data.
+## Debate Rules (follow strictly every round)
+1. **Directly rebut** the aggressive and neutral analysts' last arguments — address their specific claims with data, not generic caution
+2. **Cite specific evidence** from the analyst reports — name the source for every assertion
+3. **Do not repeat** arguments already in the debate history — advance new risk angles each round
+4. **Quantify the risk**: state specific downside levels, max acceptable drawdown, or exposure limits — avoid vague warnings
 
-Engage by questioning their optimism and emphasizing the potential downsides they may have overlooked. Address each of their counterpoints to showcase why a conservative stance is ultimately the safest path for the firm's assets. Focus on debating and critiquing their arguments to demonstrate the strength of a low-risk strategy over their approaches. Output conversationally as if you are speaking without any special formatting."""
+## Your Analysis Framework
+Build your argument across the most relevant dimensions:
+- **Downside Risk**: key support levels that if broken signal trend failure; estimated max drawdown scenario
+- **Risk Exposure Limits**: recommend maximum position size as % of portfolio given current volatility
+- **Macro & Liquidity Headwinds**: adverse conditions that increase the probability of the downside scenario
+- **Protective Measures**: specific stop-loss levels, hedging approaches, or staged entry to reduce risk
+
+## Analyst Reports
+[TECHNICAL & MARKET]
+{market_research_report}
+
+[SENTIMENT]
+{sentiment_report}
+
+[NEWS]
+{news_report}
+
+[FUNDAMENTALS]
+{fundamentals_report}
+
+## Debate Context
+- Full debate history: {history}
+- Aggressive analyst's last argument: {current_aggressive_response if current_aggressive_response.strip() else "No argument yet — present your opening case."}
+- Neutral analyst's last argument: {current_neutral_response if current_neutral_response.strip() else "No argument yet."}"""
 
         response = llm.invoke(prompt)
 

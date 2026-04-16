@@ -27,6 +27,15 @@ from .ccxt_data import (
     get_ccxt_stock_data,
     get_ccxt_indicators,
 )
+from .okx_data import (
+    get_okx_funding_rate,
+    get_okx_open_interest_history,
+    get_okx_long_short_ratio,
+    get_okx_taker_volume,
+    get_okx_elite_long_short_ratio,
+    get_okx_aggregated_oi_volume,
+    get_okx_put_call_ratio,
+)
 
 # Configuration and routing logic
 from .config import get_config
@@ -61,7 +70,19 @@ TOOLS_CATEGORIES = {
             "get_global_news",
             "get_insider_transactions",
         ]
-    }
+    },
+    "crypto_market_data": {
+        "description": "Crypto-specific market microstructure data (OKX only): funding rates, open interest, long/short ratios, taker volume, elite trader ratios, put/call ratio",
+        "tools": [
+            "get_funding_rate",
+            "get_open_interest",
+            "get_long_short_ratio",
+            "get_taker_volume",
+            "get_elite_long_short_ratio",
+            "get_aggregated_oi_volume",
+            "get_put_call_ratio",
+        ]
+    },
 }
 
 VENDOR_LIST = [
@@ -113,6 +134,28 @@ VENDOR_METHODS = {
     "get_insider_transactions": {
         "alpha_vantage": get_alpha_vantage_insider_transactions,
         "yfinance": get_yfinance_insider_transactions,
+    },
+    # crypto_market_data — OKX only
+    "get_funding_rate": {
+        "okx": get_okx_funding_rate,
+    },
+    "get_open_interest": {
+        "okx": get_okx_open_interest_history,
+    },
+    "get_long_short_ratio": {
+        "okx": get_okx_long_short_ratio,
+    },
+    "get_taker_volume": {
+        "okx": get_okx_taker_volume,
+    },
+    "get_elite_long_short_ratio": {
+        "okx": get_okx_elite_long_short_ratio,
+    },
+    "get_aggregated_oi_volume": {
+        "okx": get_okx_aggregated_oi_volume,
+    },
+    "get_put_call_ratio": {
+        "okx": get_okx_put_call_ratio,
     },
 }
 

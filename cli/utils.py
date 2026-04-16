@@ -360,17 +360,23 @@ def ask_output_language() -> str:
     return choice
 
 
-def select_technical_data_source() -> str:
-    """Select the data source for technical/market analysis.
+def select_asset_type() -> str:
+    """Select whether to analyze a stock/ETF or a cryptocurrency.
 
-    Only the technical data source (OHLCV + indicators) is affected;
-    fundamentals and news remain on their default vendor.
+    Stock: all data from yfinance.
+    Crypto: CCXT/OKX for market data & technicals, yfinance for news & fundamentals.
     """
     choice = questionary.select(
-        "Select Your [Technical Data Source]:",
+        "Select Asset Type:",
         choices=[
-            questionary.Choice("yfinance - Traditional financial data (stocks, ETFs, etc.)", "yfinance"),
-            questionary.Choice("ccxt - Cryptocurrency exchange data (default: OKX)", "ccxt"),
+            questionary.Choice(
+                "Stock / ETF  (all data via yfinance)",
+                "stock",
+            ),
+            questionary.Choice(
+                "Cryptocurrency  (CCXT/OKX for market & technicals, yfinance for news & fundamentals)",
+                "crypto",
+            ),
         ],
         instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
         style=questionary.Style([
@@ -381,7 +387,7 @@ def select_technical_data_source() -> str:
     ).ask()
 
     if choice is None:
-        console.print("\n[red]No technical data source selected. Exiting...[/red]")
+        console.print("\n[red]No asset type selected. Exiting...[/red]")
         exit(1)
 
     return choice

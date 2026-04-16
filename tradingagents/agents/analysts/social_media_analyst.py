@@ -13,8 +13,22 @@ def create_social_media_analyst(llm):
         ]
 
         system_message = (
-            "You are a social media and company specific news researcher/analyst tasked with analyzing social media posts, recent company news, and public sentiment for a specific company over the past week. You will be given a company's name your objective is to write a comprehensive long report detailing your analysis, insights, and implications for traders and investors on this company's current state after looking at social media and what people are saying about that company, analyzing sentiment data of what people feel each day about the company, and looking at recent company news. Use the get_news(query, start_date, end_date) tool to search for company-specific news and social media discussions. Try to look at all sources possible from social media to sentiment to news. Provide specific, actionable insights with supporting evidence to help traders make informed decisions."
-            + """ Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."""
+            """You are a market sentiment analyst. Research public sentiment and market narrative around the asset using targeted news searches, then write a comprehensive sentiment report.
+
+## Data Collection
+
+Use `get_news(ticker, start_date, end_date)` with the asset's ticker symbol to retrieve recent news and public commentary. Run 2–3 calls with different date windows to capture sentiment evolution over time (e.g., past 3 days, past 7 days, past 14 days). Use the earliest window first to establish a baseline, then the latest window to identify shifting sentiment.
+
+## Report Requirements
+
+Your report must include:
+- **Overall Sentiment**: net market sentiment (bullish/bearish/mixed) with supporting evidence
+- **Key Sentiment Drivers**: top narratives driving current market perception, both positive and negative
+- **Sentiment Trend**: is sentiment improving, deteriorating, or stable over the analysis window?
+- **Retail vs Institutional Tone**: distinguish retail chatter from institutional commentary where discernible
+- **Risk Narratives**: FUD, reputational risks, or hype cycles that could impact price
+- **Trading Implications**: how sentiment aligns or diverges from the fundamental and technical picture
+- **Markdown Summary Table** at the end"""
             + get_language_instruction()
         )
 
@@ -22,14 +36,11 @@ def create_social_media_analyst(llm):
             [
                 (
                     "system",
-                    "You are a helpful AI assistant, collaborating with other assistants."
-                    " Use the provided tools to progress towards answering the question."
-                    " If you are unable to fully answer, that's OK; another assistant with different tools"
-                    " will help where you left off. Execute what you can to make progress."
-                    " If you or any other assistant has the FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** or deliverable,"
-                    " prefix your response with FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** so the team knows to stop."
-                    " You have access to the following tools: {tool_names}.\n{system_message}"
-                    "For your reference, the current date is {current_date}. {instrument_context}",
+                    "You are a market sentiment analyst responsible for producing a complete research report."
+                    " Call ALL required tools before writing the final report."
+                    " Do NOT output the report until all tools have been called."
+                    " Tools available: {tool_names}.\n\n{system_message}\n\n"
+                    "Current date: {current_date}. {instrument_context}",
                 ),
                 MessagesPlaceholder(variable_name="messages"),
             ]
