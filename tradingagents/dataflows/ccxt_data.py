@@ -308,6 +308,17 @@ def get_ccxt_stock_data(
     end_dt = pd.to_datetime(end_date)
     data = data[(data["Date"] >= start_dt) & (data["Date"] <= end_dt)]
 
+    # Safety cap: prevent excessive token consumption from overly large date ranges
+    _MAX_ROWS_BY_TIMEFRAME = {
+        "1h": 168,   # 7 days × 24h
+        "4h": 84,    # 14 days × 6
+        "1d": 60,    # 60 days
+        "1w": 26,    # 26 weeks
+    }
+    max_rows = _MAX_ROWS_BY_TIMEFRAME.get(timeframe, 500)
+    if len(data) > max_rows:
+        data = data.tail(max_rows)
+
     if data.empty:
         return f"No data found for '{ccxt_symbol}' between {start_date} and {end_date}"
 
@@ -316,6 +327,9 @@ def get_ccxt_stock_data(
     for col in numeric_columns:
         if col in data.columns:
             data[col] = data[col].round(2)
+
+    if "Volume" in data.columns:
+        data["Volume"] = data["Volume"].round(0).astype("int64")
 
     csv_string = data.to_csv(index=False)
 
@@ -332,7 +346,7 @@ def get_ccxt_indicators(
     symbol: Annotated[str, "ticker symbol (short name, ccxt_symbol overrides)"],
     indicator: Annotated[str, "technical indicator to calculate"],
     curr_date: Annotated[str, "The current trading date, YYYY-mm-dd"],
-    look_back_days: Annotated[int, "how many days to look back"] = 30,
+    look_back_days: Annotated[int, "how many days to look back"] = 14,
     timeframe: Annotated[str, "Timeframe string, e.g., '1d', '1h', '4h'"] = "1d",
     **kwargs,
 ) -> str:
@@ -363,10 +377,8 @@ def get_ccxt_indicators(
         while current_dt >= before:
             date_str = current_dt.strftime("%Y-%m-%d")
             if date_str in indicator_data:
-                indicator_value = indicator_data[date_str]
-            else:
-                indicator_value = "N/A: Not a trading day"
-            date_values.append((date_str, indicator_value))
+                date_values.append((date_str, indicator_data[date_str]))
+            # Skip non-trading days — reduces token waste on sparse timeframes (e.g. 1w)
             current_dt = current_dt - relativedelta(days=1)
 
         ind_string = ""

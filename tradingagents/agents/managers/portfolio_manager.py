@@ -32,6 +32,11 @@ def create_portfolio_manager(llm):
         research_plan = state["investment_plan"]
         trader_plan = state["trader_investment_plan"]
 
+        market_research_report = state.get("market_report", "")
+        sentiment_report = state.get("sentiment_report", "")
+        news_report = state.get("news_report", "")
+        fundamentals_report = state.get("fundamentals_report", "")
+
         past_context = state.get("past_context", "")
         lessons_line = (
             f"- Lessons from prior decisions and outcomes:\n{past_context}\n"
@@ -39,23 +44,33 @@ def create_portfolio_manager(llm):
             else ""
         )
 
-        prompt = f"""As the Portfolio Manager, synthesize the risk analysts' debate and deliver the final trading decision.
+        prompt = f"""As the Portfolio Manager, synthesize all available evidence and deliver the final trading decision.
 
 {instrument_context}
 
 ---
 
 **Rating Scale** (use exactly one):
-- **Buy**: Strong conviction to enter or add to position
-- **Overweight**: Favorable outlook, gradually increase exposure
-- **Hold**: Maintain current position, no action needed
-- **Underweight**: Reduce exposure, take partial profits
-- **Sell**: Exit position or avoid entry
+- **Buy**: High-conviction long; enter or meaningfully add to position
+- **Overweight**: Moderate bullish tilt; gradually increase exposure
+- **Hold**: Neutral; maintain current position, no action needed
+- **Underweight**: Moderate bearish lean; reduce exposure, take partial profits
+- **Sell**: High-conviction exit; exit position or avoid entry entirely
 
-**Context:**
-- Research Manager's investment plan: **{research_plan}**
-- Trader's transaction proposal: **{trader_plan}**
+---
+
+**Analyst Reports Summary:**
+- Market & Technical: {market_research_report[:600].strip()}...
+- Fundamentals: {fundamentals_report[:400].strip()}...
+- News: {news_report[:300].strip()}...
+- Sentiment: {sentiment_report[:300].strip()}...
+
+**Upstream Decisions:**
+- Research Manager's investment plan: {research_plan}
+- Trader's transaction proposal: {trader_plan}
+
 {lessons_line}
+
 **Risk Analysts Debate History:**
 {history}
 

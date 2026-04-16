@@ -19,8 +19,23 @@ def create_news_analyst(llm):
         ]
 
         system_message = (
-            "You are a news researcher tasked with analyzing recent news and trends over the past week. Please write a comprehensive report of the current state of the world that is relevant for trading and macroeconomics. Use the available tools: get_news(query, start_date, end_date) for company-specific or targeted news searches, and get_global_news(curr_date, look_back_days, limit) for broader macroeconomic news. Provide specific, actionable insights with supporting evidence to help traders make informed decisions."
-            + """ Make sure to append a Markdown table at the end of the report to organize key points in the report, organized and easy to read."""
+            """You are a news analyst. Search for news using both tools, then write a comprehensive market news report.
+
+## Data Collection
+
+Use both tools to cover two levels of analysis:
+1. `get_news(ticker, start_date, end_date)` — retrieve company-specific news using the asset's ticker symbol; call once for the full analysis date window
+2. `get_global_news(curr_date, look_back_days=7, limit=20)` — broad macroeconomic and geopolitical news
+
+## Report Requirements
+
+Your report must include:
+- **Macro & Geopolitical Context**: central bank policy, economic data releases, geopolitical events relevant to the asset
+- **Industry & Sector Developments**: regulatory changes, sector-wide trends, competitor news
+- **Company-Specific News**: earnings, guidance, management changes, products, legal/regulatory issues
+- **Sentiment Assessment**: overall news tone (bullish/bearish/neutral) and key catalysts
+- **Trading Implications**: how current news flow supports or contradicts the technical picture
+- **Markdown Summary Table** at the end"""
             + get_language_instruction()
         )
 
@@ -28,14 +43,11 @@ def create_news_analyst(llm):
             [
                 (
                     "system",
-                    "You are a helpful AI assistant, collaborating with other assistants."
-                    " Use the provided tools to progress towards answering the question."
-                    " If you are unable to fully answer, that's OK; another assistant with different tools"
-                    " will help where you left off. Execute what you can to make progress."
-                    " If you or any other assistant has the FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** or deliverable,"
-                    " prefix your response with FINAL TRANSACTION PROPOSAL: **BUY/HOLD/SELL** so the team knows to stop."
-                    " You have access to the following tools: {tool_names}.\n{system_message}"
-                    "For your reference, the current date is {current_date}. {instrument_context}",
+                    "You are a news analyst responsible for producing a complete research report."
+                    " Call ALL required tools before writing the final report."
+                    " Do NOT output the report until all tools have been called."
+                    " Tools available: {tool_names}.\n\n{system_message}\n\n"
+                    "Current date: {current_date}. {instrument_context}",
                 ),
                 MessagesPlaceholder(variable_name="messages"),
             ]

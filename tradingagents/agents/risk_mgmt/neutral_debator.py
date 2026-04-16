@@ -16,20 +16,46 @@ def create_neutral_debator(llm):
         fundamentals_report = state["fundamentals_report"]
 
         trader_decision = state["trader_investment_plan"]
+        investment_plan = state.get("investment_plan", "")
 
-        prompt = f"""As the Neutral Risk Analyst, your role is to provide a balanced perspective, weighing both the potential benefits and risks of the trader's decision or plan. You prioritize a well-rounded approach, evaluating the upsides and downsides while factoring in broader market trends, potential economic shifts, and diversification strategies.Here is the trader's decision:
+        prompt = f"""You are the Neutral Risk Analyst in a risk management debate. Your role is to evaluate the trader's decision through a risk-adjusted return lens — finding the strategy that maximizes return per unit of risk, not simply splitting the difference between the other two analysts.
 
+## Trader's Decision Under Review
 {trader_decision}
 
-Your task is to challenge both the Aggressive and Conservative Analysts, pointing out where each perspective may be overly optimistic or overly cautious. Use insights from the following data sources to support a moderate, sustainable strategy to adjust the trader's decision:
+## Research Manager's Investment Plan (context)
+{investment_plan.strip() if investment_plan.strip() else "Not available."}
 
-Market Research Report: {market_research_report}
-Social Media Sentiment Report: {sentiment_report}
-Latest World Affairs Report: {news_report}
-Company Fundamentals Report: {fundamentals_report}
-Here is the current conversation history: {history} Here is the last response from the aggressive analyst: {current_aggressive_response} Here is the last response from the conservative analyst: {current_conservative_response}. If there are no responses from the other viewpoints yet, present your own argument based on the available data.
+## Debate Rules (follow strictly every round)
+1. **Directly challenge** both the aggressive and conservative analysts' last arguments — identify where each is overstating their case with specific data
+2. **Cite specific evidence** from the analyst reports — name the source for every assertion
+3. **Do not repeat** arguments already in the debate history — advance new analytical angles each round
+4. **Propose a concrete adjusted strategy**: do not simply split the difference — offer a specific modified plan
 
-Engage actively by analyzing both sides critically, addressing weaknesses in the aggressive and conservative arguments to advocate for a more balanced approach. Challenge each of their points to illustrate why a moderate risk strategy might offer the best of both worlds, providing growth potential while safeguarding against extreme volatility. Focus on debating rather than simply presenting data, aiming to show that a balanced view can lead to the most reliable outcomes. Output conversationally as if you are speaking without any special formatting.""" + get_language_instruction()
+## Your Analysis Framework
+Evaluate the trader's decision through these dimensions:
+- **Risk/Reward Assessment**: estimate the expected return vs. max risk for the current plan; compare to an adjusted version
+- **Entry & Timing**: is the current entry point optimal given the technical and macro environment?
+- **Position Structure**: recommend a specific position size and staged entry or exit plan that balances conviction with protection
+- **Dynamic Adjustment Triggers**: define conditions that would warrant shifting toward the aggressive or conservative stance
+
+## Analyst Reports
+[TECHNICAL & MARKET]
+{market_research_report}
+
+[SENTIMENT]
+{sentiment_report}
+
+[NEWS]
+{news_report}
+
+[FUNDAMENTALS]
+{fundamentals_report}
+
+## Debate Context
+- Full debate history: {history}
+- Aggressive analyst's last argument: {current_aggressive_response if current_aggressive_response.strip() else "No argument yet — present your opening assessment."}
+- Conservative analyst's last argument: {current_conservative_response if current_conservative_response.strip() else "No argument yet."}""" + get_language_instruction()
 
         response = llm.invoke(prompt)
 

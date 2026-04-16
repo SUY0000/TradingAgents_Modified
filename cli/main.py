@@ -495,35 +495,49 @@ def get_user_selections():
             box_content += f"\n[dim]Default: {default}[/dim]"
         return Panel(box_content, border_style="blue", padding=(1, 2))
 
-    # Step 1: Ticker symbol
+    # Step 1: Asset type
     console.print(
         create_question_box(
-            "Step 1: Ticker Symbol",
-            "Enter the exact ticker symbol to analyze, including exchange suffix when needed (examples: SPY, CNC.TO, 7203.T, 0700.HK)",
-            "SPY",
+            "Step 1: Asset Type",
+            "Select whether to analyze a stock/ETF or a cryptocurrency",
         )
     )
-    selected_ticker = get_ticker()
+    asset_type = select_asset_type()
+    console.print(
+        f"[green]Asset type:[/green] {'Stock / ETF' if asset_type == 'stock' else 'Cryptocurrency'}"
+    )
 
-    # Step 2: Technical data source
-    console.print(
-        create_question_box(
-            "Step 2: Technical Data Source",
-            "Select the data source for market/technical analysis (fundamentals & news stay on default)"
+    # Step 2: Ticker symbol(s)
+    if asset_type == "stock":
+        console.print(
+            create_question_box(
+                "Step 2: Ticker Symbol",
+                "Enter the exact ticker symbol (examples: SPY, AAPL, CNC.TO, 7203.T, 0700.HK)",
+                "SPY",
+            )
         )
-    )
-    selected_technical_source = select_technical_data_source()
-    ccxt_symbol = ""
-    if selected_technical_source == "ccxt":
+        selected_ticker = get_ticker()
+        ccxt_symbol = ""
+    else:
+        console.print(
+            create_question_box(
+                "Step 2a: yfinance Ticker",
+                "Enter the yfinance ticker for news & fundamentals (examples: BTC-USD, ETH-USD, SOL-USD)",
+                "BTC-USD",
+            )
+        )
+        selected_ticker = get_yfinance_ticker_crypto()
+
         console.print(
             create_question_box(
                 "Step 2b: CCXT Trading Pair",
-                "Enter the trading pair in CCXT format (e.g. BTC/USDT, ETH/USDT)"
+                "Enter the CCXT trading pair for market data & technicals (examples: BTC/USDT, ETH/USDT, SOL/USDT)",
+                "BTC/USDT",
             )
         )
         ccxt_symbol = get_ccxt_symbol()
         console.print(
-            f"[green]Selected trading pair:[/green] {ccxt_symbol}"
+            f"[green]CCXT trading pair:[/green] {ccxt_symbol}"
         )
 
     # Step 3: Analysis date
@@ -635,6 +649,8 @@ def get_user_selections():
 
     return {
         "ticker": selected_ticker,
+        "asset_type": asset_type,
+        "ccxt_symbol": ccxt_symbol,
         "analysis_date": analysis_date,
         "analysts": selected_analysts,
         "research_depth": selected_research_depth,
@@ -646,8 +662,6 @@ def get_user_selections():
         "openai_reasoning_effort": reasoning_effort,
         "anthropic_effort": anthropic_effort,
         "output_language": output_language,
-        "technical_data_source": selected_technical_source,
-        "ccxt_symbol": ccxt_symbol,
     }
 
 
@@ -672,6 +686,11 @@ def get_ticker():
         raise typer.Exit(1)
 
     return (ticker.strip() or "SPY").upper()
+
+
+def get_yfinance_ticker_crypto():
+    """Get yfinance ticker for cryptocurrency (used for news & fundamentals, e.g. BTC-USD)."""
+    return typer.prompt("", default="BTC-USD")
 
 
 def get_analysis_date():
@@ -1002,12 +1021,13 @@ def run_analysis(checkpoint: bool = False):
     config["output_language"] = selections.get("output_language", "English")
     config["checkpoint_enabled"] = checkpoint
 
-    # Technical data source configuration
-    technical_source = selections.get("technical_data_source", "yfinance")
-    config["data_vendors"]["core_stock_apis"] = technical_source
-    config["data_vendors"]["technical_indicators"] = technical_source
-    # CCXT-specific configuration
-    if technical_source == "ccxt":
+    # Data vendor configuration based on asset type
+    asset_type = selections.get("asset_type", "stock")
+    if asset_type == "crypto":
+        config["data_vendors"]["core_stock_apis"] = "ccxt"
+        config["data_vendors"]["technical_indicators"] = "ccxt"
+        config["data_vendors"]["news_data"] = "yfinance"
+        config["data_vendors"]["fundamental_data"] = "yfinance"
         config["ccxt_symbol"] = selections.get("ccxt_symbol", "")
 
     # Create stats callback handler for tracking LLM/tool calls
