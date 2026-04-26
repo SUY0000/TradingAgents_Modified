@@ -1,6 +1,7 @@
-import questionary
+import os
 from typing import List, Optional, Tuple, Dict
 
+import questionary
 from rich.console import Console
 
 from cli.models import AnalystType
@@ -182,12 +183,30 @@ def _prompt_custom_model_id() -> str:
     ).ask().strip()
 
 
+def _get_required_env(name: str) -> str:
+    value = os.getenv(name, "").strip()
+    if not value:
+        console.print(f"\n[red]Missing required environment variable: {name}[/red]")
+        exit(1)
+    return value
+
+
+def get_custom_llm_api_key(provider: str) -> str | None:
+    provider_lower = provider.lower()
+    if provider_lower == "custom_openai":
+        return _get_required_env("CUSTOM_OPENAI_API_KEY")
+    if provider_lower == "custom_anthropic":
+        return _get_required_env("CUSTOM_ANTHROPIC_API_KEY")
+    return None
+
+
 def _select_model(provider: str, mode: str) -> str:
     """Select a model for the given provider and mode (quick/deep)."""
-    if provider.lower() == "openrouter":
+    provider_lower = provider.lower()
+    if provider_lower == "openrouter":
         return select_openrouter_model()
 
-    if provider.lower() == "azure":
+    if provider_lower == "azure":
         return questionary.text(
             f"Enter Azure deployment name ({mode}-thinking):",
             validate=lambda x: len(x.strip()) > 0 or "Please enter a deployment name.",
@@ -233,8 +252,10 @@ def select_llm_provider() -> tuple[str, str | None]:
     # (display_name, provider_key, base_url)
     PROVIDERS = [
         ("OpenAI", "openai", "https://api.openai.com/v1"),
+        ("Custom OpenAI-Compatible API", "custom_openai", "CUSTOM_OPENAI_BASE_URL"),
         ("Google", "google", None),
         ("Anthropic", "anthropic", "https://api.anthropic.com/"),
+        ("Custom Anthropic-Compatible API", "custom_anthropic", "CUSTOM_ANTHROPIC_BASE_URL"),
         ("xAI", "xai", "https://api.x.ai/v1"),
         ("DeepSeek", "deepseek", "https://api.deepseek.com"),
         ("Qwen", "qwen", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
@@ -265,6 +286,11 @@ def select_llm_provider() -> tuple[str, str | None]:
         exit(1)
 
     provider, url = choice
+    if provider == "custom_openai":
+        url = _get_required_env("CUSTOM_OPENAI_BASE_URL")
+    elif provider == "custom_anthropic":
+        url = _get_required_env("CUSTOM_ANTHROPIC_BASE_URL")
+
     return provider, url
 
 

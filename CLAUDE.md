@@ -145,10 +145,12 @@ print(decision)  # One of: BUY, OVERWEIGHT, HOLD, UNDERWEIGHT, SELL
 
 - **Python 环境**: 项目使用 conda 环境 `tradingagents`。运行 Python 代码需先激活 `conda activate tradingagents`，直接使用 `python` 会因缺少依赖（ccxt 等）而失败。
 - **RTK工具使用**: 项目配置了RTK (Rust Token Killer)用于token优化。使用`rtk read`、`rtk grep`、`rtk find`代替内置的Read、Grep、Glob工具以节省token。
+- **RTK 备用路径**: 若 `rtk read/grep/find` 在 Bash 中解析失败（如 `/usr/bin/read: not a valid identifier`），改用 Claude 的 `Read` 工具或普通只读 `grep` 继续。
 - **Edit 工具前置要求**: 调用 `Edit` 前必须用 `Read` 工具（非 `rtk read`）读取目标文件，否则报 "File has not been read yet" 错误；`rtk read` 不满足此前置条件。
 - **供应商参数传递**: 供应商实现使用`**kwargs`接受额外参数，确保向后兼容。新参数可安全添加到工具层，非相关供应商会忽略这些参数。
 - **工具层修改模式**: 修改工具函数时，添加参数并通过`route_to_vendor()`传递。CCXT支持`timeframe`参数用于多时间周期数据获取。
 - **测试结构**: `tests/`目录包含测试模板和fixtures，但无完整测试运行器。参考`test_ccxt_data_template.py`作为测试模板。
+- **测试运行 gotcha**: 部分 `tests/test_*.py` 是 `unittest` 风格且可能不被 `pytest` 收集；运行定向测试用 `conda activate tradingagents && python -m unittest tests.test_xxx`。
 - **OKX REST API smoke test**: 用 `os.environ['TRADINGAGENTS_CACHE_DIR'] = '/tmp/okx_test_cache'` 隔离测试缓存，避免污染 `~/.tradingagents/cache/`。
 - **CLI 函数分工**: `select_*` 交互选择函数放 `cli/utils.py`（questionary）；简单文本输入 `get_*` 放 `cli/main.py`（`typer.prompt`）；`create_question_box()` 提供展示框，prompt 函数只做裸输入。`main.py` 中的 `get_ticker`/`get_analysis_date` 本地定义有意覆盖 `from cli.utils import *` 导入的同名函数。
 - **`data_vendors` 键名**: 精确键名为 `core_stock_apis`、`technical_indicators`、`news_data`、`fundamental_data`、`crypto_market_data`；误用 `news`/`fundamentals` 等错误键名会静默无效（`set_config()` 深合并不报错）。

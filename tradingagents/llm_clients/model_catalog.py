@@ -23,6 +23,22 @@ MODEL_OPTIONS: ProviderModeOptions = {
             ("GPT-5.4 Pro - Most capable, expensive ($30/$180 per 1M tokens)", "gpt-5.4-pro"),
         ],
     },
+    "custom_openai": {
+        "quick": [
+            ("GPT-5.4", "gpt-5.4"),
+            ("GPT-5.5 Medium", "gpt-5.5"),
+            ("GPT-5.5 High", "gpt-5.5-high"),
+            ("GPT-5.5 Xhigh", "gpt-5.5-xhigh"),
+            ("Custom model ID", "custom"),
+        ],
+        "deep": [
+            ("GPT-5.4", "gpt-5.4"),
+            ("GPT-5.5 Medium", "gpt-5.5"),
+            ("GPT-5.5 High", "gpt-5.5-high"),
+            ("GPT-5.5 Xhigh", "gpt-5.5-xhigh"),
+            ("Custom model ID", "custom"),
+        ],
+    },
     "anthropic": {
         "quick": [
             ("Claude Sonnet 4.6 - Best speed and intelligence balance", "claude-sonnet-4-6"),
@@ -34,6 +50,22 @@ MODEL_OPTIONS: ProviderModeOptions = {
             ("Claude Opus 4.5 - Premium, max intelligence", "claude-opus-4-5"),
             ("Claude Sonnet 4.6 - Best speed and intelligence balance", "claude-sonnet-4-6"),
             ("Claude Sonnet 4.5 - Agents and coding", "claude-sonnet-4-5"),
+        ],
+    },
+    "custom_anthropic": {
+        "quick": [
+            ("GPT-5.4", "gpt-5.4"),
+            ("GPT-5.5 Medium", "gpt-5.5"),
+            ("GPT-5.5 High", "gpt-5.5-high"),
+            ("GPT-5.5 Xhigh", "gpt-5.5-xhigh"),
+            ("Custom model ID", "custom"),
+        ],
+        "deep": [
+            ("GPT-5.4", "gpt-5.4"),
+            ("GPT-5.5 Medium", "gpt-5.5"),
+            ("GPT-5.5 High", "gpt-5.5-high"),
+            ("GPT-5.5 Xhigh", "gpt-5.5-xhigh"),
+            ("Custom model ID", "custom"),
         ],
     },
     "google": {
