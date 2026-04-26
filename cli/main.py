@@ -647,6 +647,7 @@ def get_user_selections():
         )
         anthropic_effort = ask_anthropic_effort()
 
+    llm_provider = selected_llm_provider.lower()
     return {
         "ticker": selected_ticker,
         "asset_type": asset_type,
@@ -654,8 +655,9 @@ def get_user_selections():
         "analysis_date": analysis_date,
         "analysts": selected_analysts,
         "research_depth": selected_research_depth,
-        "llm_provider": selected_llm_provider.lower(),
+        "llm_provider": llm_provider,
         "backend_url": backend_url,
+        "llm_api_key": get_custom_llm_api_key(llm_provider),
         "shallow_thinker": selected_shallow_thinker,
         "deep_thinker": selected_deep_thinker,
         "google_thinking_level": thinking_level,
@@ -1014,6 +1016,7 @@ def run_analysis(checkpoint: bool = False):
     config["deep_think_llm"] = selections["deep_thinker"]
     config["backend_url"] = selections["backend_url"]
     config["llm_provider"] = selections["llm_provider"].lower()
+    config["llm_api_key"] = selections.get("llm_api_key")
     # Provider-specific thinking configuration
     config["google_thinking_level"] = selections.get("google_thinking_level")
     config["openai_reasoning_effort"] = selections.get("openai_reasoning_effort")
