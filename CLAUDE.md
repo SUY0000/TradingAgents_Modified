@@ -6,6 +6,118 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 TradingAgents is a multi-agent LLM financial trading framework built on LangGraph. It simulates a trading firm with specialized agents (analysts, researchers, traders, risk managers) that collaborate through structured debate to produce trading decisions. Decisions are one of: BUY, OVERWEIGHT, HOLD, UNDERWEIGHT, SELL.
 
+## Fork 工作流与双 Worktree 开发规范
+
+本项目是从上游开源仓库 fork 而来，遵循"双 worktree 隔离"开发模式。任何代码改动都必须遵守下列规则。
+
+### 仓库布局
+
+```
+开发 worktree:  .../<ProjectName>/         ← git 操作 + 代码编辑
+构建 worktree:  .../<ProjectName>_Build/   ← 编译 + 打包 + 安装
+                                                          （detached HEAD，不参与提交）
+```
+
+两个目录共享同一个 `.git`，但工作区独立。命名约定：构建 worktree 与开发 worktree 同级，目录名加 `_Build` 后缀。
+
+### Remote 设定
+
+- `origin` → 用户的 fork（push 目标）
+- `upstream` → 上游官方仓库（只 fetch，不 push）
+
+### 一次性初始化命令
+
+```bash
+cd .../<ProjectName>
+git remote add upstream <official-repo-url>
+git checkout -b feat/<feature-name>
+git push -u origin feat/<feature-name>
+git worktree add --detach .../<ProjectName>_Build feat/<feature-name>
+```
+
+### 三条铁律（违反即停下汇报）
+
+1. **不在构建 worktree 编辑源码**。构建 worktree 是 detached HEAD，编辑容易丢失。
+2. **不在开发 worktree 跑 `*install` 或 `*build`**。开发 worktree 必须保持 `git status` clean。
+3. **构建 worktree 切分支永远用 `--detach`**。同一分支不能同时 checkout 在两个 worktree。
+
+### 命令分流表
+
+| 操作 | 命令 | 在哪个 worktree |
+|------|------|----------------|
+| 编辑代码 | (编辑器) | 开发 |
+| `git commit` / `rebase` / `cherry-pick` | git 命令 | 开发 |
+| 同步 upstream | 见下方流程 | 开发 |
+| `push` 到 fork | `git push origin <branch>` | 开发 |
+| 类型检查 / 单元测试 | `bun run typecheck` / `bun test` 等 | 开发 |
+| 安装依赖 | `bun install` (或项目对应命令) | 构建 |
+| 编译 / 打包 / 出包 | `bun run build` 等 | 构建 |
+| 安装产物到本机 | `cp -r dist/... /Applications/` 等 | 构建 |
+| 清理构建产物 | `git clean -fxd` 或针对性 `rm -rf` | 构建 |
+
+### 跨 Worktree 同步代码
+
+每次在开发 worktree commit 后，构建 worktree 必须显式拉取最新 commit：
+
+```bash
+cd .../<ProjectName>_Build
+git fetch . <branch-name>             # 从本地 .git 拉，不需要先 push
+git switch --detach FETCH_HEAD
+bun install                           # 仅当 package.json 变了
+bun run build                         # 重新构建
+```
+
+注意 `git fetch .` 中的 `.` 表示本地仓库 —— 这避免了"先 push 到 GitHub 再 pull 回来"的冗余路径。
+
+### 同步上游官方更新（标准流程）
+
+每周或重大版本发布后执行：
+
+```bash
+cd .../<ProjectName>     # 必须在开发 worktree
+git fetch upstream
+git checkout main
+git merge --ff-only upstream/main
+git push origin main
+git checkout feat/<feature-name>
+git rebase main                        # 解决冲突
+git push --force-with-lease origin feat/<feature-name>
+```
+
+之后构建 worktree 用上一节的同步命令拉取 rebase 后的新 commit。
+
+### 冲突处理决策
+
+- **rebase 顺利**：force-with-lease 推送，进入下一阶段
+- **冲突可控**：手动解决，`git add` + `git rebase --continue`
+- **冲突大面积爆发**：`git rebase --abort`，从最新 main 创建新分支，对照开发计划文档**重新实施**（这是为什么开发计划必须作为可重放规格保存）
+
+### Git 干净度铁规
+
+- 开发 worktree 的 `git status` **必须**永远是 `nothing to commit, working tree clean` 后才能 rebase / 同步 upstream
+- `node_modules`、`dist/`、`build/`、`out/`、`.turbo/`、`target/`、`*.tsbuildinfo` 必须在 `.gitignore` 或 `.git/info/exclude` 里
+- 不确定时先 `git clean -nxd`（dry-run）预览，再决定是否 `-fxd` 实删
+
+### 改动最小化原则（降低 rebase 冲突）
+
+为了让上游同步尽可能无冲突：
+
+1. 改动尽量集中、聚焦在最少的文件
+2. 不顺手重构周边代码，即使看到优化空间
+3. 不在功能 commit 里夹带 lint / 格式化 / 注释润色
+4. 每次 rebase 前先 `git diff upstream/main -- <你改过的文件>` 看上游动了什么
+
+### 给 AI Agent 的硬性要求
+
+执行任何代码改动前：
+
+1. 用 `git worktree list` 确认当前所在 worktree
+2. 不在错误的 worktree 跑会留下产物的命令
+3. commit 前 `git status` 自检，不把构建产物或临时文件提交进去
+4. rebase 后强推必须用 `--force-with-lease`，禁用 `--force`
+5. 不主动 `git push` 到 main 分支或上游仓库
+
+
 ## Build & Run Commands
 
 ```bash
@@ -143,15 +255,9 @@ print(decision)  # One of: BUY, OVERWEIGHT, HOLD, UNDERWEIGHT, SELL
 
 ### Development Workflow
 
-- **Python 环境**: 项目使用 conda 环境 `tradingagents`。运行 Python 代码需先激活 `conda activate tradingagents`，直接使用 `python` 会因缺少依赖（ccxt 等）而失败。
-- **RTK工具使用**: 项目配置了RTK (Rust Token Killer)用于token优化。使用`rtk read`、`rtk grep`、`rtk find`代替内置的Read、Grep、Glob工具以节省token。
-- **RTK 备用路径**: 若 `rtk read/grep/find` 在 Bash 中解析失败（如 `/usr/bin/read: not a valid identifier`），改用 Claude 的 `Read` 工具或普通只读 `grep` 继续。
 - **Edit 工具前置要求**: 调用 `Edit` 前必须用 `Read` 工具（非 `rtk read`）读取目标文件，否则报 "File has not been read yet" 错误；`rtk read` 不满足此前置条件。
 - **供应商参数传递**: 供应商实现使用`**kwargs`接受额外参数，确保向后兼容。新参数可安全添加到工具层，非相关供应商会忽略这些参数。
 - **工具层修改模式**: 修改工具函数时，添加参数并通过`route_to_vendor()`传递。CCXT支持`timeframe`参数用于多时间周期数据获取。
-- **测试结构**: `tests/`目录包含测试模板和fixtures，但无完整测试运行器。参考`test_ccxt_data_template.py`作为测试模板。
-- **测试运行 gotcha**: 部分 `tests/test_*.py` 是 `unittest` 风格且可能不被 `pytest` 收集；运行定向测试用 `conda activate tradingagents && python -m unittest tests.test_xxx`。
-- **OKX REST API smoke test**: 用 `os.environ['TRADINGAGENTS_CACHE_DIR'] = '/tmp/okx_test_cache'` 隔离测试缓存，避免污染 `~/.tradingagents/cache/`。
 - **CLI 函数分工**: `select_*` 交互选择函数放 `cli/utils.py`（questionary）；简单文本输入 `get_*` 放 `cli/main.py`（`typer.prompt`）；`create_question_box()` 提供展示框，prompt 函数只做裸输入。`main.py` 中的 `get_ticker`/`get_analysis_date` 本地定义有意覆盖 `from cli.utils import *` 导入的同名函数。
 - **`data_vendors` 键名**: 精确键名为 `core_stock_apis`、`technical_indicators`、`news_data`、`fundamental_data`、`crypto_market_data`；误用 `news`/`fundamentals` 等错误键名会静默无效（`set_config()` 深合并不报错）。
 - **加密货币双 ticker 约定**: CLI 加密模式同时采集两个 ticker——yfinance 格式（如 `BTC-USD`，用于新闻/基本面，同时作为 `propagate()` 的主 ticker）与 CCXT 格式（如 `BTC/USDT`，写入 `config["ccxt_symbol"]`，用于行情/技术面）。
