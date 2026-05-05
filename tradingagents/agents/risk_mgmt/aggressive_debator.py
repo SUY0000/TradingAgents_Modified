@@ -33,7 +33,7 @@ Argue for the risk parameters that capture maximum upside within the established
 - If the conservative analyst proposed a tight stop: argue why that specific level is too conservative, citing the technical structure — where is the actual thesis invalidation point?
 - If the neutral analyst proposed reduced sizing: argue why the current volatility regime and conviction level justify fuller exposure
 - Quantify the opportunity cost: what return is left on the table if the overly cautious parameters are adopted?
-- Propose your own concrete alternative with specific numbers — position size percentage, entry zone, stop level
+- Propose your own concrete alternative with specific numbers — position size percentage, stop-loss level, and any staged-sizing structure (do not redefine the entry price — that is the Trader's parameter)
 
 The argument should be grounded in the analyst reports. Don't argue that risks don't exist — argue that the risk/reward ratio justifies the exposure level you're advocating.
 
@@ -52,7 +52,7 @@ The argument should be grounded in the analyst reports. Don't argue that risks d
 
 ## Debate Context
 Full history: {history}
-Conservative analyst's last argument: {current_conservative_response if current_conservative_response.strip() else "No argument yet — present your opening case for the proposed risk parameters."}
+Conservative analyst's last argument: {current_conservative_response if current_conservative_response.strip() else "No argument yet — present your opening case for the most aggressive risk parameters defensible under the established thesis."}
 Neutral analyst's last argument: {current_neutral_response if current_neutral_response.strip() else "No argument yet."}""" + get_language_instruction()
 
         response = llm.invoke(prompt)

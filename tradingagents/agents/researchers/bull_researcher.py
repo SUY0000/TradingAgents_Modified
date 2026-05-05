@@ -31,7 +31,7 @@ def create_bull_researcher(llm):
 ## How to Build Your Argument
 
 Draw from whichever dimensions offer the strongest support — the quality of your evidence matters more than covering every category:
-- **Technical thesis**: What does the price structure, trend, and indicator set reveal about the direction of least resistance? Where is risk/reward most favorable for entry?
+- **Technical thesis**: What does the price structure, trend, and indicator set reveal about the direction of least resistance? Which technical signals most clearly favor the long side?
 - **Fundamental case**: If business quality or valuation supports the long side, make that case with specific numbers from the reports.
 - **Macro and news tailwinds**: Which macro conditions or upcoming catalysts favor the bull thesis right now?
 - **Sentiment and positioning**: Does the current sentiment setup — whether contrarian opportunity or confirmed momentum — support entry?
