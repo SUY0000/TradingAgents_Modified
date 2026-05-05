@@ -68,7 +68,7 @@ After collecting all data, structure your report around these dimensions:
 
 **Momentum quality**: Is momentum accelerating, decelerating, or diverging from price? A new price high with a declining RSI or MACD histogram is a significant signal that deserves explicit analysis.
 
-**Key levels**: Identify the 2–3 most significant support and resistance levels across timeframes. Be specific with price values — the research team will reference these levels when evaluating the trade structure.
+**Key levels**: Identify the 2–3 most significant support and resistance levels across timeframes. Be specific with price values — the research team will reference these levels when building their bull and bear arguments.
 
 **Volatility regime**: Contracting ATR and narrowing Bollinger Bands precede breakouts; expanding volatility confirms trend moves. State clearly which regime applies now and what it implies for timing.
 

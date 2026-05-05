@@ -35,7 +35,7 @@ Apply this standard rigorously. Acknowledge when both sides made valid points, b
 - **Underweight**: The argument leans bearish, but the bull side raised legitimate factors worth respecting. Moderate conviction.
 - **Sell**: The bear case substantially outweighed the bull case. High conviction in the downside direction.
 
-In the **strategic actions** field, give the Trader concrete implementation guidance: which price levels matter for entry, what condition would invalidate the thesis, and what position size is consistent with the conviction level.
+In the **strategic actions** field, give the Trader a research brief — not execution parameters: which technical levels are pivotal to the thesis (validation triggers and invalidation triggers), what catalysts or conditions would force re-evaluation, and what conviction level the Trader should size against. The Trader will translate this into specific entry, stop, and sizing values.
 
 ## Debate History
 {history}{get_language_instruction()}"""

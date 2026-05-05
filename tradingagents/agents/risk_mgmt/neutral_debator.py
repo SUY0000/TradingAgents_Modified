@@ -31,7 +31,7 @@ Find the optimal implementation of the established thesis, not a philosophical m
 
 - Challenge the **aggressive analyst** where they are underweighting a specific, quantifiable risk — identify the exact metric or price level that justifies more caution than they allow
 - Challenge the **conservative analyst** where they are applying unnecessary protection that degrades the risk/reward ratio — show with data why their proposed limit is too restrictive for the current setup
-- Synthesize a **concrete alternative implementation**: specific position size, entry approach (all-at-once or staged with defined levels), stop-loss price, and any conditional adjustments (e.g., "reduce to half size if price fails to hold X within 3 days")
+- Synthesize a **concrete alternative implementation**: specific position size, sizing pacing (all-at-once vs. staged — the size cadence, not the entry price levels which are the Trader's parameter), stop-loss price, and any conditional adjustments (e.g., "reduce to half size if price fails to hold X within 3 days")
 - Define your **adjustment triggers**: at what price or indicator level would you shift toward the aggressive position? Toward the conservative position?
 
 Use volatility data (ATR, Bollinger width) to anchor sizing recommendations. Your output should be a specific, implementable plan with numbers — not a statement of principles.

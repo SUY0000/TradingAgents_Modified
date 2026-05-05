@@ -255,6 +255,7 @@ print(decision)  # One of: BUY, OVERWEIGHT, HOLD, UNDERWEIGHT, SELL
 - **Agent pipeline 职责边界原则**: 每层 agent 只做本层的判断，不替下游决策。Analysts → 客观市场状态描述（禁止输出 "Trading Implications/Synthesis" 或 entry/stop/sizing 建议）；Bull/Bear → 举证说理（不做结论）；Research Manager → 综合辩论出方向性研究结论（不是最终投资决策，是给 Trader 的 brief）；Trader → 将 RM 的研究结论**执行参数化**（entry/stop/target/sizing），不独立重评投资逻辑；Risk Debators → 只辩论风险参数（仓位大小/止损位置/对冲），不重新评估投资方向；Portfolio Manager → 唯一的最终决策者。
 - **Analyst prompt 模板一致性**: 四个 analyst 的 `ChatPromptTemplate` 外层均应使用同一模式：`"Tools available: {tool_names}.\n\n{system_message}\n\nCurrent date: {current_date}. {instrument_context}"`；news/social/fundamentals 曾有带 "Call ALL required tools / Do NOT output until..." 的不同外层，导致禁令重复且格式不统一。实际的工具调用门控由代码 `if len(result.tool_calls) == 0` 负责，prompt 中的禁令语句是冗余的。
 - **Analyst prompt 中的合法 vs. 越界语言**: `"bullish/bearish/neutral"`（市场状态描述）合法；`"Trading Implications"`、`"Trading Synthesis"`、`"entry zone"`、`"stop-loss placement"`、`"risk/reward assessment"`（交易判断）越界——这些词汇会引导 analyst 代替 Trader/PM 做决策。
+- **每层 agent 的越界语言（贯穿全链）**: 上一条 analyst 越界词规则同样适用于下游层。Bull/Bear researchers 越界词：`entry`、`risk/reward for entry`、`entry timing`（researcher 论证方向，不论证时机）；Risk debators 越界词：`entry zone`、`entry price levels`、`target price`（risk 层只动 size/stop/staging/hedging，入场价是 Trader 的参数）；Research Manager 越界词：`price levels for entry`、`position size in shares/%`（RM 给研究简报，不给执行参数）。每层 agent 只用本层语言。
 
 ### Development Workflow
 
