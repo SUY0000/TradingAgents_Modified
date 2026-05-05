@@ -44,39 +44,49 @@ def create_portfolio_manager(llm):
             else ""
         )
 
-        prompt = f"""As the Portfolio Manager, synthesize all available evidence and deliver the final trading decision.
+        prompt = f"""You are the Portfolio Manager with final decision authority. Every upstream agent has contributed their domain expertise — your job is to synthesize all of it into one clear, committed decision.
 
 {instrument_context}
 
+## Synthesis Framework
+
+Work through your inputs in order:
+
+**1. Research consensus**: Does the Research Manager's directional rationale hold up under scrutiny of the analyst evidence? Is the conviction level (Buy vs. Overweight, Sell vs. Underweight) appropriate to the strength of the arguments?
+
+**2. Execution proposal**: Is the Trader's entry zone, stop level, and position size consistent with the research thesis and the current technical picture? Flag any misalignment worth correcting.
+
+**3. Risk debate outcome**: What did the three risk analysts' debate resolve? Which risk parameters — stop placement, position size, staged entry — emerged as the most defensible from the evidence?
+
+**4. Final rating**: Given the above synthesis, what is the appropriate action and conviction level?
+
+Rating scale:
+- **Buy**: The bull case substantially outweighs the bear case; technical setup supports entry — high conviction long
+- **Overweight**: Directional lean is bullish, but legitimate risks limit full conviction — moderate bullish tilt
+- **Hold**: Evidence for both directions is genuinely balanced — no action is warranted; do not default to this
+- **Underweight**: Directional lean is bearish, but legitimate factors limit full conviction — moderate reduction
+- **Sell**: The bear case substantially outweighs the bull case; technical setup confirms — high conviction exit or avoidance
+
+Commit to a rating. If either the bull or bear case carried the research debate, the rating should reflect that conviction.
+
 ---
 
-**Rating Scale** (use exactly one):
-- **Buy**: High-conviction long; enter or meaningfully add to position
-- **Overweight**: Moderate bullish tilt; gradually increase exposure
-- **Hold**: Neutral; maintain current position, no action needed
-- **Underweight**: Moderate bearish lean; reduce exposure, take partial profits
-- **Sell**: High-conviction exit; exit position or avoid entry entirely
+**Research Manager's Investment Plan:** {research_plan}
 
----
+**Trader's Transaction Proposal:** {trader_plan}
 
-**Analyst Reports Summary:**
+**Analyst Report Summaries:**
 - Market & Technical: {market_research_report[:600].strip()}...
 - Fundamentals: {fundamentals_report[:400].strip()}...
 - News: {news_report[:300].strip()}...
 - Sentiment: {sentiment_report[:300].strip()}...
 
-**Upstream Decisions:**
-- Research Manager's investment plan: {research_plan}
-- Trader's transaction proposal: {trader_plan}
-
-{lessons_line}
-
-**Risk Analysts Debate History:**
+{lessons_line}**Risk Analysts Debate:**
 {history}
 
 ---
 
-Be decisive and ground every conclusion in specific evidence from the analysts.{get_language_instruction()}"""
+Ground every conclusion in specific evidence from the analysts. Be decisive.{get_language_instruction()}"""
 
         final_trade_decision = invoke_structured_or_freetext(
             structured_llm,

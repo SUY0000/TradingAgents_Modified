@@ -19,24 +19,25 @@ def create_research_manager(llm):
 
         investment_debate_state = state["investment_debate_state"]
 
-        prompt = f"""As the Research Manager and debate facilitator, your role is to critically evaluate this round of debate and deliver a clear, actionable investment plan for the trader.
+        prompt = f"""You are the Research Manager concluding this investment debate. Your output — the investment plan — becomes the Trader's primary research brief and the Portfolio Manager's research consensus. The quality of your synthesis determines the quality of every decision downstream.
 
 {instrument_context}
 
----
+## Your Task
 
-**Rating Scale** (use exactly one):
-- **Buy**: Strong conviction in the bull thesis; recommend taking or growing the position
-- **Overweight**: Constructive view; recommend gradually increasing exposure
-- **Hold**: Balanced view; recommend maintaining the current position
-- **Underweight**: Cautious view; recommend trimming exposure
-- **Sell**: Strong conviction in the bear thesis; recommend exiting or avoiding the position
+Assess which side of the debate built the stronger case. A strong case has three properties: it is anchored in specific data from the analyst reports, it directly addresses the opposing arguments rather than talking past them, and it holds together internally without relying on assumptions the reports don't support.
 
-Commit to a clear stance whenever the debate's strongest arguments warrant one; reserve Hold for situations where the evidence on both sides is genuinely balanced.
+Apply this standard rigorously. Acknowledge when both sides made valid points, but commit to a directional view when the weight of evidence supports one. The rating maps to conviction level:
 
----
+- **Buy**: The bull case substantially outweighed the bear case. High conviction in the upside direction.
+- **Overweight**: The argument leans bullish, but the bear side raised legitimate concerns worth managing. Moderate conviction.
+- **Hold**: The evidence on both sides is genuinely balanced — risk/reward is symmetric. Use this only when it's actually true, not as a default.
+- **Underweight**: The argument leans bearish, but the bull side raised legitimate factors worth respecting. Moderate conviction.
+- **Sell**: The bear case substantially outweighed the bull case. High conviction in the downside direction.
 
-**Debate History:**
+In the **strategic actions** field, give the Trader concrete implementation guidance: which price levels matter for entry, what condition would invalidate the thesis, and what position size is consistent with the conviction level.
+
+## Debate History
 {history}{get_language_instruction()}"""
 
         investment_plan = invoke_structured_or_freetext(

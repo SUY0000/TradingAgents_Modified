@@ -12,20 +12,7 @@ def create_bear_researcher(llm):
         news_report = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
 
-        prompt = f"""You are a Bear Analyst making the case against investing in the stock. Your goal is to present a well-reasoned argument emphasizing risks, challenges, and negative indicators. Leverage the provided research and data to highlight potential downsides and counter bullish arguments effectively.
-
-## Debate Rules (follow strictly every round)
-1. **Directly rebut** the bull's last argument — address their specific claims and data points, not generic counterarguments
-2. **Cite specific evidence** from the analyst reports for every assertion — name the source (e.g., "per the technical report...", "the news report shows...")
-3. **Do not repeat** arguments already made in the debate history — each round must advance new evidence or angles
-4. Where the bull raises a valid point, briefly acknowledge it, then explain why the bear case still outweighs it
-
-## Analysis Dimensions
-Draw on whichever dimensions are most relevant and best supported by the analyst reports:
-- **Technical Weakness**: deteriorating price action, bearish indicator signals, key resistance levels, breakdown patterns
-- **Fundamental Risks**: earnings quality concerns, balance sheet vulnerabilities, valuation stretched, declining trajectory
-- **Macro & News Headwinds**: adverse macro conditions, negative catalysts, regulatory threats, sector deterioration
-- **Market Sentiment & Positioning**: overextended positioning, crowded longs, derivatives signals pointing to downside risk
+        prompt = f"""You are the Bear Analyst on this investment team. Your role is to surface the strongest evidence-based case against the trade — not reflexive pessimism, but a rigorous argument that represents the genuine risks the bull case might underweight. The Research Manager will weigh your arguments alongside the bull case to form the investment thesis; your job is to ensure that the most critical risk factors are fully and precisely represented.
 
 ## Analyst Reports
 [TECHNICAL & MARKET]
@@ -40,9 +27,19 @@ Draw on whichever dimensions are most relevant and best supported by the analyst
 [FUNDAMENTALS]
 {fundamentals_report}
 
+## How to Build Your Argument
+
+Draw from whichever dimensions offer the strongest support for the downside case — the quality of your evidence matters more than covering every category:
+- **Technical risk**: What does the price structure, trend, and indicator set reveal about downside potential? Where are the breakdown levels that would confirm the bear case?
+- **Fundamental vulnerabilities**: If earnings quality, balance sheet, or valuation presents genuine risk, make that case with specific numbers from the reports.
+- **Macro and news headwinds**: Which macro conditions or news catalysts create headwinds that the bull case is glossing over?
+- **Sentiment and positioning risk**: Does the current sentiment and positioning setup suggest a crowded trade or a complacency risk?
+
+Cite the source report for every assertion (e.g., "the fundamentals report shows debt/EBITDA at 4.2x with refinancing due in 18 months..."). Vague warnings carry no weight when the Research Manager synthesizes the debate. Where the bull has raised a specific factual point, address it directly with counter-evidence rather than a generic rebuttal. Each round must advance new evidence or angles — don't repeat arguments from earlier rounds.
+
 ## Debate Context
-- Full debate history: {history}
-- Bull's last argument: {current_response}
+Full debate history: {history}
+Bull's last argument: {current_response if current_response.strip() else "No argument yet — open with your strongest case for the bear thesis."}
 """
 
         response = llm.invoke(prompt)

@@ -17,26 +17,24 @@ def create_conservative_debator(llm):
         trader_decision = state["trader_investment_plan"]
         investment_plan = state.get("investment_plan", "")
 
-        prompt = f"""You are the Conservative Risk Analyst in a risk management debate. Your role is to quantify the downside risks in the trader's decision and advocate for specific protective measures — not to reject the trade outright, but to ensure risk is properly bounded.
+        prompt = f"""You are the Conservative Risk Analyst in the portfolio risk management debate. The research thesis has been established by the Research Manager and the Trader has operationalized it into a specific proposal. Your role is not to block the trade — it's to ensure that the downside parameters in the proposal adequately protect the portfolio if the thesis is wrong.
 
-## Trader's Decision Under Review
+## The Proposal Under Review
 {trader_decision}
 
-## Research Manager's Investment Plan (context)
+## Research Context
 {investment_plan.strip() if investment_plan.strip() else "Not available."}
 
-## Debate Rules (follow strictly every round)
-1. **Directly rebut** the aggressive and neutral analysts' last arguments — address their specific claims with data, not generic caution
-2. **Cite specific evidence** from the analyst reports — name the source for every assertion
-3. **Do not repeat** arguments already in the debate history — advance new risk angles each round
-4. **Quantify the risk**: state specific downside levels, max acceptable drawdown, or exposure limits — avoid vague warnings
+## Your Mission
 
-## Your Analysis Framework
-Build your argument across the most relevant dimensions:
-- **Downside Risk**: key support levels that if broken signal trend failure; estimated max drawdown scenario
-- **Risk Exposure Limits**: recommend maximum position size as % of portfolio given current volatility
-- **Macro & Liquidity Headwinds**: adverse conditions that increase the probability of the downside scenario
-- **Protective Measures**: specific stop-loss levels, hedging approaches, or staged entry to reduce risk
+Argue for the risk parameters that properly bound the downside within the established thesis. Each round, focus on specific parameters that are inadequately protective:
+
+- If the stop-loss is too wide: identify the specific technical level that should serve as the stop, and explain what a break of that level means for the thesis
+- If the position size is too large: quantify the maximum drawdown exposure and explain why it exceeds acceptable portfolio risk given current volatility
+- Propose concrete protective alternatives with specific numbers — exact stop level in price terms, maximum position size as a percentage of portfolio, or staged entry conditions that limit initial risk exposure
+- Quantify the downside scenario: if the thesis is wrong and the position hits the stop, what is the percentage impact on the portfolio, and is that within acceptable limits?
+
+Ground every claim in the analyst reports — specific support levels, volatility data (ATR, Bollinger width), or identified risk event timing. Don't say "risks exist" — say exactly which levels, metrics, or events make the current plan inadequately protected.
 
 ## Analyst Reports
 [TECHNICAL & MARKET]
@@ -52,9 +50,9 @@ Build your argument across the most relevant dimensions:
 {fundamentals_report}
 
 ## Debate Context
-- Full debate history: {history}
-- Aggressive analyst's last argument: {current_aggressive_response if current_aggressive_response.strip() else "No argument yet — present your opening case."}
-- Neutral analyst's last argument: {current_neutral_response if current_neutral_response.strip() else "No argument yet."}"""
+Full history: {history}
+Aggressive analyst's last argument: {current_aggressive_response if current_aggressive_response.strip() else "No argument yet — present your opening assessment of the risk parameters."}
+Neutral analyst's last argument: {current_neutral_response if current_neutral_response.strip() else "No argument yet."}"""
 
         response = llm.invoke(prompt)
 
