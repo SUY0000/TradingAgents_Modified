@@ -18,26 +18,24 @@ def create_neutral_debator(llm):
         trader_decision = state["trader_investment_plan"]
         investment_plan = state.get("investment_plan", "")
 
-        prompt = f"""You are the Neutral Risk Analyst in a risk management debate. Your role is to evaluate the trader's decision through a risk-adjusted return lens — finding the strategy that maximizes return per unit of risk, not simply splitting the difference between the other two analysts.
+        prompt = f"""You are the Neutral Risk Analyst in the portfolio risk management debate. The research thesis has been established by the Research Manager and the Trader has operationalized it into a specific proposal. Your role is to find the risk management structure that delivers the best risk-adjusted return — capturing as much of the opportunity as the aggressive analyst wants, with as much downside protection as the conservative analyst demands.
 
-## Trader's Decision Under Review
+## The Proposal Under Review
 {trader_decision}
 
-## Research Manager's Investment Plan (context)
+## Research Context
 {investment_plan.strip() if investment_plan.strip() else "Not available."}
 
-## Debate Rules (follow strictly every round)
-1. **Directly challenge** both the aggressive and conservative analysts' last arguments — identify where each is overstating their case with specific data
-2. **Cite specific evidence** from the analyst reports — name the source for every assertion
-3. **Do not repeat** arguments already in the debate history — advance new analytical angles each round
-4. **Propose a concrete adjusted strategy**: do not simply split the difference — offer a specific modified plan
+## Your Mission
 
-## Your Analysis Framework
-Evaluate the trader's decision through these dimensions:
-- **Risk/Reward Assessment**: estimate the expected return vs. max risk for the current plan; compare to an adjusted version
-- **Entry & Timing**: is the current entry point optimal given the technical and macro environment?
-- **Position Structure**: recommend a specific position size and staged entry or exit plan that balances conviction with protection
-- **Dynamic Adjustment Triggers**: define conditions that would warrant shifting toward the aggressive or conservative stance
+Find the optimal implementation of the established thesis, not a philosophical middle ground. Each round:
+
+- Challenge the **aggressive analyst** where they are underweighting a specific, quantifiable risk — identify the exact metric or price level that justifies more caution than they allow
+- Challenge the **conservative analyst** where they are applying unnecessary protection that degrades the risk/reward ratio — show with data why their proposed limit is too restrictive for the current setup
+- Synthesize a **concrete alternative implementation**: specific position size, entry approach (all-at-once or staged with defined levels), stop-loss price, and any conditional adjustments (e.g., "reduce to half size if price fails to hold X within 3 days")
+- Define your **adjustment triggers**: at what price or indicator level would you shift toward the aggressive position? Toward the conservative position?
+
+Use volatility data (ATR, Bollinger width) to anchor sizing recommendations. Your output should be a specific, implementable plan with numbers — not a statement of principles.
 
 ## Analyst Reports
 [TECHNICAL & MARKET]
@@ -53,9 +51,9 @@ Evaluate the trader's decision through these dimensions:
 {fundamentals_report}
 
 ## Debate Context
-- Full debate history: {history}
-- Aggressive analyst's last argument: {current_aggressive_response if current_aggressive_response.strip() else "No argument yet — present your opening assessment."}
-- Conservative analyst's last argument: {current_conservative_response if current_conservative_response.strip() else "No argument yet."}""" + get_language_instruction()
+Full history: {history}
+Aggressive analyst's last argument: {current_aggressive_response if current_aggressive_response.strip() else "No argument yet — present your opening risk-adjusted assessment of the proposal."}
+Conservative analyst's last argument: {current_conservative_response if current_conservative_response.strip() else "No argument yet."}""" + get_language_instruction()
 
         response = llm.invoke(prompt)
 

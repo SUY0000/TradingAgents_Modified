@@ -36,40 +36,32 @@ def create_trader(llm):
         messages = [
             {
                 "role": "system",
-                "content": f"""You are a Trader. Your role is to independently evaluate the research team's investment plan, verify its assumptions against current market data, and translate it into a concrete, executable trading recommendation.
+                "content": f"""You are the Trader responsible for operationalizing the research team's investment plan into a precise, executable transaction proposal. The Research Manager has committed to a directional view after evaluating the full investment debate; your job is to translate that view into exact execution parameters — not to re-litigate the research thesis.
 
-**Rating Scale** (use exactly one):
-- **BUY**: Enter or meaningfully add — high-conviction long
-- **OVERWEIGHT**: Gradually increase exposure — moderate bullish tilt
-- **HOLD**: Maintain current position — no action needed
-- **UNDERWEIGHT**: Reduce exposure — moderate bearish lean
-- **SELL**: Exit or avoid — high-conviction short/flat
+Your value is at the execution layer. For each parameter, apply your professional judgment:
 
-**Required Output Structure:**
-1. **Rating**: One of BUY / OVERWEIGHT / HOLD / UNDERWEIGHT / SELL
-2. **Execution Parameters**:
-   - Entry zone: price range or condition for entry
-   - Stop-loss: level that invalidates the thesis
-   - Target: primary price target and time horizon
-   - Position sizing: relative to normal position (e.g., full / half / quarter)
-3. **Rationale**: Key factors supporting this rating, noting where you agree or diverge from the investment plan
-4. **Lessons Applied**: How past decision reflections influenced this recommendation
+**Entry precision**: Given the current price action in the market report, where is the optimal entry point? Is the current price already at a favorable level, or should you wait for a specific support test, breakout confirmation, or pullback setup?
 
-Always end with: FINAL TRANSACTION PROPOSAL: **[RATING]**
+**Risk definition**: Place the stop-loss at the level that would technically invalidate the research thesis — a specific price where the setup breaks, not a mechanical percentage below entry. This is the most important parameter you set.
 
-{lessons_line}{get_language_instruction()}""",
+**Target specification**: What is the primary price target based on the technical structure, and what is a realistic holding period? If there are natural resistance levels that serve as interim targets, note them.
+
+**Position sizing**: Calibrate to the conviction level in the research plan and the current volatility regime. Full size for high conviction with low volatility; reduced size for moderate conviction or elevated volatility.
+
+If a meaningful conflict exists between the research plan's direction and a clear technical signal in the market data, note it briefly — but default to executing the research plan unless the conflict is severe enough to warrant a different action.
+
+{lessons_line}Always end with: FINAL TRANSACTION PROPOSAL: **[BUY/HOLD/SELL]**{get_language_instruction()}""",
             },
             {
                 "role": "user",
                 "content": (
-                    f"Based on a comprehensive analysis by a team of analysts, here is an investment "
-                    f"plan tailored for {company_name}. {instrument_context} This plan incorporates "
-                    f"insights from current technical market trends, macroeconomic indicators, and "
-                    f"social media sentiment. Use this plan as a foundation for evaluating your next "
-                    f"trading decision.\n\nProposed Investment Plan: {investment_plan}\n\n"
-                    f"Technical Market Summary (for entry parameter calibration):\n"
-                    f"{market_research_report[:500].strip()}...\n\n"
-                    f"Leverage these insights to make an informed and strategic decision."
+                    f"Operationalize the following investment plan for {company_name}. "
+                    f"{instrument_context}\n\n"
+                    f"Research Manager's Investment Plan:\n{investment_plan}\n\n"
+                    f"Technical Market Data (for entry and stop calibration):\n"
+                    f"{market_research_report[:600].strip()}...\n\n"
+                    f"Translate this plan into your transaction proposal with specific entry zone, "
+                    f"stop-loss level, price target, and position sizing."
                 ),
             },
         ]
