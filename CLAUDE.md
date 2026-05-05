@@ -252,6 +252,9 @@ print(decision)  # One of: BUY, OVERWEIGHT, HOLD, UNDERWEIGHT, SELL
 - `get_news(ticker, ...)` 底层两个实现（yfinance: `yf.Ticker(ticker).get_news()`；Alpha Vantage: `params={"tickers": ticker}`）均为严格 ticker-based，不支持自由文本查询词。设计 news/sentiment analyst prompt 时不可要求 LLM 传入 CEO 名、情绪词等作为查询参数。
 - `get_indicators` 的 `indicator` 参数支持逗号分隔多个指标（实现内部 split 处理）。设计 prompt 时应引导 LLM 每个 timeframe 一次传入所有指标，避免逐个调用（4 TF × 8 指标 = 32 次 → 4 次）。
 - Risk debators（aggressive/conservative/neutral）通过 `state.get("investment_plan", "")` 可获取 research_manager 的原始投资计划；`state["trader_investment_plan"]` 是 trader 的执行决策。两者都是 risk debate 的有效上下文输入。
+- **Agent pipeline 职责边界原则**: 每层 agent 只做本层的判断，不替下游决策。Analysts → 客观市场状态描述（禁止输出 "Trading Implications/Synthesis" 或 entry/stop/sizing 建议）；Bull/Bear → 举证说理（不做结论）；Research Manager → 综合辩论出方向性研究结论（不是最终投资决策，是给 Trader 的 brief）；Trader → 将 RM 的研究结论**执行参数化**（entry/stop/target/sizing），不独立重评投资逻辑；Risk Debators → 只辩论风险参数（仓位大小/止损位置/对冲），不重新评估投资方向；Portfolio Manager → 唯一的最终决策者。
+- **Analyst prompt 模板一致性**: 四个 analyst 的 `ChatPromptTemplate` 外层均应使用同一模式：`"Tools available: {tool_names}.\n\n{system_message}\n\nCurrent date: {current_date}. {instrument_context}"`；news/social/fundamentals 曾有带 "Call ALL required tools / Do NOT output until..." 的不同外层，导致禁令重复且格式不统一。实际的工具调用门控由代码 `if len(result.tool_calls) == 0` 负责，prompt 中的禁令语句是冗余的。
+- **Analyst prompt 中的合法 vs. 越界语言**: `"bullish/bearish/neutral"`（市场状态描述）合法；`"Trading Implications"`、`"Trading Synthesis"`、`"entry zone"`、`"stop-loss placement"`、`"risk/reward assessment"`（交易判断）越界——这些词汇会引导 analyst 代替 Trader/PM 做决策。
 
 ### Development Workflow
 
