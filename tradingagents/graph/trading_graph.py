@@ -164,6 +164,10 @@ class TradingAgentsGraph:
             vendors.get("core_stock_apis") == "ccxt"
             and vendors.get("technical_indicators") == "ccxt"
         )
+        is_a_share = (
+            vendors.get("core_stock_apis") == "akshare"
+            and vendors.get("technical_indicators") == "akshare"
+        )
         market_tools = [get_stock_data, get_indicators]
         if is_crypto:
             from tradingagents.agents.utils.crypto_market_tools import (
@@ -183,6 +187,23 @@ class TradingAgentsGraph:
                 get_crypto_elite_long_short_ratio,
                 get_crypto_aggregated_oi_volume,
                 get_crypto_put_call_ratio,
+            ]
+        elif is_a_share:
+            from tradingagents.agents.utils.cn_market_tools import (
+                get_a_share_dragon_tiger,
+                get_a_share_northbound_holding,
+                get_a_share_main_capital_flow,
+                get_a_share_limit_status,
+                get_a_share_sector_performance,
+                get_a_share_margin_balance,
+            )
+            market_tools += [
+                get_a_share_dragon_tiger,
+                get_a_share_northbound_holding,
+                get_a_share_main_capital_flow,
+                get_a_share_limit_status,
+                get_a_share_sector_performance,
+                get_a_share_margin_balance,
             ]
         return {
             "market": ToolNode(market_tools),

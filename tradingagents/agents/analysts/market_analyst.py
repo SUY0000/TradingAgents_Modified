@@ -15,6 +15,14 @@ from tradingagents.agents.utils.crypto_market_tools import (
     get_crypto_aggregated_oi_volume,
     get_crypto_put_call_ratio,
 )
+from tradingagents.agents.utils.cn_market_tools import (
+    get_a_share_dragon_tiger,
+    get_a_share_northbound_holding,
+    get_a_share_main_capital_flow,
+    get_a_share_limit_status,
+    get_a_share_sector_performance,
+    get_a_share_margin_balance,
+)
 
 
 def create_market_analyst(llm):
@@ -29,6 +37,10 @@ def create_market_analyst(llm):
             vendors.get("core_stock_apis") == "ccxt"
             and vendors.get("technical_indicators") == "ccxt"
         )
+        is_a_share = (
+            vendors.get("core_stock_apis") == "akshare"
+            and vendors.get("technical_indicators") == "akshare"
+        )
 
         tools = [get_stock_data, get_indicators]
         if is_crypto:
@@ -40,6 +52,15 @@ def create_market_analyst(llm):
                 get_crypto_elite_long_short_ratio,
                 get_crypto_aggregated_oi_volume,
                 get_crypto_put_call_ratio,
+            ]
+        elif is_a_share:
+            tools += [
+                get_a_share_dragon_tiger,
+                get_a_share_northbound_holding,
+                get_a_share_main_capital_flow,
+                get_a_share_limit_status,
+                get_a_share_sector_performance,
+                get_a_share_margin_balance,
             ]
 
         system_message = (
@@ -94,6 +115,34 @@ After completing OHLCV and indicator data collection, call all 7 derivatives too
 
 Add a **Derivatives & Microstructure** section covering: funding rate trend (contango or backwardation pressure on spot), OI vs. price divergence (conviction or distribution?), elite vs. retail long/short positioning differential, taker buy/sell flow balance, and P/C ratio as an options market sentiment gauge. Synthesize into a single derivatives signal — bullish, bearish, or neutral — with your confidence level and the key factor driving it."""
                 if is_crypto
+                else ""
+            )
+            + (
+                """
+
+## A-Share Specific Microstructure
+
+A-shares (China mainland stocks) have unique market structure signals unavailable for other asset classes. After completing OHLCV and indicator collection, call all 6 A-share tools using a 30-day window (start_date = current_date − 30 days, end_date = current_date):
+
+| Tool | What it measures |
+|------|-----------------|
+| `get_a_share_dragon_tiger` | Dates the stock triggered the exchange's abnormal-fluctuation alert |
+| `get_a_share_northbound_holding` | Foreign capital (Hong Kong Stock Connect) holding changes |
+| `get_a_share_main_capital_flow` | Net buy/sell by order tier: super-large / large / medium / small |
+| `get_a_share_limit_status` | Limit-up / limit-down events detected from daily price changes |
+| `get_a_share_sector_performance` | Shenwan L1 industry sector OHLCV for relative-strength comparison |
+| `get_a_share_margin_balance` | Margin financing (融资) and short-selling (融券) balance changes |
+
+Add an **A-Share Microstructure** section to your report covering:
+- **Northbound flow**: is foreign capital accumulating or distributing? (bullish/bearish/neutral)
+- **Main capital flow**: institutional vs. retail positioning — accumulation pattern or distribution?
+- **Limit-up/down history**: any abnormal price events in the period, and their context
+- **Dragon-Tiger appearances**: hot-money activity flags (most blue chips show none — report that explicitly)
+- **Sector relative strength**: is the stock outperforming, matching, or lagging its Shenwan sector?
+- **Margin balance trend**: leverage build-up or de-leveraging direction
+
+Synthesize these signals into a single A-share microstructure verdict — bullish, bearish, or neutral — and cite the 1–2 most decisive factors. Do not output entry prices, stop-loss levels, or position-sizing recommendations — those decisions belong to the Trader downstream."""
+                if is_a_share
                 else ""
             )
             + get_language_instruction()
