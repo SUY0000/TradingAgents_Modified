@@ -266,3 +266,10 @@ print(decision)  # One of: BUY, OVERWEIGHT, HOLD, UNDERWEIGHT, SELL
 - **CLI 函数分工**: `select_*` 交互选择函数放 `cli/utils.py`（questionary）；简单文本输入 `get_*` 放 `cli/main.py`（`typer.prompt`）；`create_question_box()` 提供展示框，prompt 函数只做裸输入。`main.py` 中的 `get_ticker`/`get_analysis_date` 本地定义有意覆盖 `from cli.utils import *` 导入的同名函数。
 - **`data_vendors` 键名**: 精确键名为 `core_stock_apis`、`technical_indicators`、`news_data`、`fundamental_data`、`crypto_market_data`；误用 `news`/`fundamentals` 等错误键名会静默无效（`set_config()` 深合并不报错）。
 - **加密货币双 ticker 约定**: CLI 加密模式同时采集两个 ticker——yfinance 格式（如 `BTC-USD`，用于新闻/基本面，同时作为 `propagate()` 的主 ticker）与 CCXT 格式（如 `BTC/USDT`，写入 `config["ccxt_symbol"]`，用于行情/技术面）。
+- **A 股模式判定**: `core_stock_apis == "akshare"` 且 `technical_indicators == "akshare"` 同时成立才视为 A 股，与 crypto 双条件检测对齐。CLI 选择 "a_share" 后自动将 5 个 vendor 全设为 akshare（core_stock_apis / technical_indicators / news_data / fundamental_data / cn_market_data）。
+- **A 股 ticker 格式**: 外部格式为 `600519.SH` / `000001.SZ` / `430047.BJ`；validator 正则 `^\d{6}\.(SH|SZ|BJ)$`。vendor 内部通过 `_resolve_a_share_symbol(symbol, fmt)` 转换：`"6digit"` → `600519`，`"exchange_prefix"` → `SH600519`（财务报表 API 要求此格式）。analyst / state 层始终使用外部格式。
+- **akshare 财务报表 API 格式要求**: `stock_balance_sheet_by_report_em` / `stock_cash_flow_sheet_by_report_em` / `stock_profit_sheet_by_report_em` 需要 `exchange_prefix` 格式（`SH600519`），而非 6 位纯数字；误用 6 位格式会返回 `None` 并触发 `'NoneType' is not subscriptable` 错误。
+- **akshare 融资融券 API 日期格式**: `stock_margin_detail_sse` / `stock_margin_detail_szse` 需要 `YYYYMMDD` 格式（无破折号），如 `'20260430'`；误用 `YYYY-MM-DD` 格式会静默失败或返回空 DataFrame。
+- **akshare 接口命名漂移风险**: 每次 akshare 升级前先跑 `python tests/test_akshare_smoke.py` 验证。已知变更：`stock_em_jgdy_detail` 已更名为 `stock_jgdy_detail_em`；`stock_lhb_stock_statistic_um` 不存在，实际函数为 `stock_lhb_stock_detail_date_em`（按 symbol 返回历史上榜日期）。
+- **`cn_market_data` category 仅 akshare 一个 vendor，无 fallback**；akshare 失败直接抛错（错误信息会被 vendor 函数的 `try/except` 捕获并以字符串形式返回给 LLM，不会崩溃整个 pipeline）。
+- **A 股 OHLCV 默认 `adjust="qfq"`（前复权）**，与美股 yfinance 默认行为一致。`get_akshare_limit_status` 基于每日收盘价涨跌幅推算（≥+9.9% = 涨停，≤-9.9% = 跌停），不调用额外 API，无需注意限流。

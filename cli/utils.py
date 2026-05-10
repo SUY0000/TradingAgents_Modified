@@ -550,9 +550,10 @@ def ask_output_language() -> str:
 
 
 def select_asset_type() -> str:
-    """Select whether to analyze a stock/ETF or a cryptocurrency.
+    """Select whether to analyze a stock/ETF, an A-share, or a cryptocurrency.
 
     Stock: all data from yfinance.
+    A-Share: all data from akshare (China mainland stocks).
     Crypto: CCXT/OKX for market data & technicals, yfinance for news & fundamentals.
     """
     choice = questionary.select(
@@ -561,6 +562,10 @@ def select_asset_type() -> str:
             questionary.Choice(
                 "Stock / ETF  (all data via yfinance)",
                 "stock",
+            ),
+            questionary.Choice(
+                "A-Share  (China mainland stocks via akshare: 600519.SH, 000001.SZ, 300750.SZ, etc.)",
+                "a_share",
             ),
             questionary.Choice(
                 "Cryptocurrency  (CCXT/OKX for market & technicals, yfinance for news & fundamentals)",
@@ -580,6 +585,30 @@ def select_asset_type() -> str:
         exit(1)
 
     return choice
+
+
+def get_a_share_ticker() -> str:
+    """Prompt the user to enter an A-share ticker with exchange suffix."""
+    import re
+    pattern = re.compile(r"^\d{6}\.(SH|SZ|BJ)$", re.IGNORECASE)
+
+    symbol = questionary.text(
+        "Enter A-share ticker with exchange suffix (e.g. 600519.SH, 000001.SZ, 300750.SZ, 430047.BJ):",
+        validate=lambda x: (
+            bool(pattern.match(x.strip()))
+            or "Format must be 600519.SH / 000001.SZ / 430047.BJ  (6-digit code + .SH/.SZ/.BJ)"
+        ),
+        style=questionary.Style([
+            ("text", "fg:green"),
+            ("highlighted", "noinherit"),
+        ]),
+    ).ask()
+
+    if not symbol:
+        console.print("\n[red]No ticker provided. Exiting...[/red]")
+        exit(1)
+
+    return symbol.strip().upper()
 
 
 def get_ccxt_symbol() -> str:

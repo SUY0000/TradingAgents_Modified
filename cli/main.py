@@ -503,9 +503,8 @@ def get_user_selections():
         )
     )
     asset_type = select_asset_type()
-    console.print(
-        f"[green]Asset type:[/green] {'Stock / ETF' if asset_type == 'stock' else 'Cryptocurrency'}"
-    )
+    _asset_type_display = {"stock": "Stock / ETF", "a_share": "A-Share (China mainland)", "crypto": "Cryptocurrency"}
+    console.print(f"[green]Asset type:[/green] {_asset_type_display.get(asset_type, asset_type)}")
 
     # Step 2: Ticker symbol(s)
     if asset_type == "stock":
@@ -517,6 +516,16 @@ def get_user_selections():
             )
         )
         selected_ticker = get_ticker()
+        ccxt_symbol = ""
+    elif asset_type == "a_share":
+        console.print(
+            create_question_box(
+                "Step 2: A-Share Ticker",
+                "Enter A-share ticker with exchange suffix (examples: 600519.SH, 000001.SZ, 300750.SZ, 688981.SH, 430047.BJ)",
+                "600519.SH",
+            )
+        )
+        selected_ticker = get_a_share_ticker()
         ccxt_symbol = ""
     else:
         console.print(
@@ -1032,6 +1041,12 @@ def run_analysis(checkpoint: bool = False):
         config["data_vendors"]["news_data"] = "yfinance"
         config["data_vendors"]["fundamental_data"] = "yfinance"
         config["ccxt_symbol"] = selections.get("ccxt_symbol", "")
+    elif asset_type == "a_share":
+        config["data_vendors"]["core_stock_apis"] = "akshare"
+        config["data_vendors"]["technical_indicators"] = "akshare"
+        config["data_vendors"]["news_data"] = "akshare"
+        config["data_vendors"]["fundamental_data"] = "akshare"
+        config["data_vendors"]["cn_market_data"] = "akshare"
 
     # Create stats callback handler for tracking LLM/tool calls
     stats_handler = StatsCallbackHandler()
