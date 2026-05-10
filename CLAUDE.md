@@ -246,6 +246,7 @@ print(decision)  # One of: BUY, OVERWEIGHT, HOLD, UNDERWEIGHT, SELL
 - OKX rubik contracts stat 端点（`/api/v5/rubik/stat/contracts/*`）大多数需要 `instId`（如 `BTC-USDT-SWAP`），而非 `ccy`（如 `BTC`）。例外：`/open-interest-volume` 和 `/option/open-interest-volume-ratio` 使用 `ccy`。文档看似通用，但实际测试中 `ccy` 会返回 `"instId can't be empty"` 400 错误。
 - OKX `/rubik/stat/contracts/open-interest-history` 响应为 4 字段数组：`[ts, oi, oiCcy, oiUsd]`，不是 3 字段。
 - OKX crypto market 数据层：`okx_data.py` 用 `requests` 库直接调 REST API（rubik stat 端点不在 CCXT unified API 中）；`crypto_market_tools.py` 封装为 LangChain tools；`market_analyst.py` 通过 `is_crypto` 检测（`core_stock_apis == "ccxt"` **且** `technical_indicators == "ccxt"`）条件加载这些工具，与 CLI 同时赋值两个 vendor 的行为保持一致。
+- OKX `_okx_request()` 的重试策略：网络错误（`ConnectionError`/`Timeout`）和 API 限流错误（code `50011`）分开处理。`50011` 触发指数退避重试（2s → 4s → 8s，最多 2 次），耗尽后才抛 `ValueError`。`okx_request_limiter` 装饰器仅防止同一函数内的快速连续调用，不同 rubik 端点各自独立计时、不跨函数协调，因此 LLM 顺序调用多个工具时仍可能触发 IP 级别限流——这正是需要 50011 重试的原因。
 - LangGraph analyst 工具双注册要求：给 analyst 添加工具时必须同时更新两处——(1) analyst 文件内 `llm.bind_tools(tools)`（告诉 LLM 有哪些工具）；(2) `trading_graph.py` `_create_tool_nodes()` 里的 `ToolNode([...])`（决定哪些工具能实际执行）。只更新前者会导致 LLM 发起工具调用但 ToolNode 找不到该工具，静默失败。
 - `config.py` 的 `set_config()` 对嵌套 dict（如 `data_vendors`）做深合并而非整体替换；`initialize_config()` 使用 `deepcopy`，`DEFAULT_CONFIG` 不会通过浅拷贝被外部代码意外修改。
 - 所有 analyst（market/news/social/fundamentals）均使用 completion-gate 风格的 system prompt（而非通用多智能体 boilerplate），明确禁止在所有工具调用完成前输出报告。通用 boilerplate 中的 "another assistant will help where you left off" 措辞会削弱 MANDATORY 工具指令的约束力，不应用于任何有强制工具要求的节点。
