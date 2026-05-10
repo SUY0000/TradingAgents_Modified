@@ -167,6 +167,19 @@ def _okx_request(path: str, params: dict, max_retries: int = 3) -> list:
             resp.raise_for_status()
             body = resp.json()
 
+            if body.get("code") == "50011":
+                if attempt < max_retries - 1:
+                    wait = 2 ** (attempt + 1)
+                    logger.warning(
+                        f"OKX rate limit (50011) on {path}, "
+                        f"retrying in {wait}s (attempt {attempt + 1}/{max_retries - 1})"
+                    )
+                    time.sleep(wait)
+                    continue
+                raise ValueError(
+                    f"OKX API error {body.get('code')}: {body.get('msg')}"
+                )
+
             if body.get("code") != "0":
                 raise ValueError(
                     f"OKX API error {body.get('code')}: {body.get('msg')}"
