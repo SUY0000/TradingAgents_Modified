@@ -74,7 +74,7 @@ After collecting all data, structure your report around these dimensions:
 
 **Timeframe confluence**: Where multiple timeframes agree, the signal is high-conviction. Where they conflict, characterize the conflict specifically and assess the likely resolution direction.
 
-Close with a markdown summary table: one row per timeframe, columns for trend direction, key level, and primary signal reading."""
+Close with a markdown summary table: one row per timeframe, columns for trend direction, key level, and primary signal reading. Your report ends with this table — do not add trading scenarios, entry conditions, stop-loss levels, target prices, or buy/sell recommendations. Those decisions belong to the Trader and Portfolio Manager downstream."""
             + (
                 """
 

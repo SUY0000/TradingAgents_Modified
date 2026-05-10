@@ -36,7 +36,7 @@ Call oldest-to-newest. When the 14-day baseline shows one sentiment and the 3-da
 
 **Positioning read**: What does the prevailing sentiment suggest about who holds the position? Crowded narratives at extremes are fragile; exhausted bearishness at lows can signal a washout.
 
-Close with a clear assessment: net sentiment direction, trend direction (improving / stable / deteriorating), and whether sentiment is currently a confirming or contrarian signal relative to the price level."""
+Close with a clear assessment: net sentiment direction, trend direction (improving / stable / deteriorating), and whether sentiment is currently a confirming or contrarian signal relative to the price level. Your report ends here — do not add investment recommendations, position guidance, or advice on whether to buy or sell."""
             + get_language_instruction()
         )
 

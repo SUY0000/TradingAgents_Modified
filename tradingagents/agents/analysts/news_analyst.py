@@ -39,7 +39,7 @@ Use both tools to cover two levels of analysis:
 
 **Cross-asset signals**: Are there developments in correlated markets or sectors that imply directional pressure on this asset?
 
-Close with a summary table mapping each significant item to its estimated directional impact (bullish / bearish / neutral) and time horizon."""
+Close with a summary table mapping each significant item to its estimated directional impact (bullish / bearish / neutral) and time horizon. Your report ends with this table — do not add buy/sell recommendations, investment conclusions, or guidance on how to trade based on these findings."""
             + get_language_instruction()
         )
 

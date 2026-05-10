@@ -48,7 +48,7 @@ Call all four tools — each covers a distinct dimension of the financial pictur
 
 For crypto or digital assets where traditional financial statements are unavailable: focus on protocol revenue, token supply dynamics, ecosystem growth metrics, and developer activity where data exists. Note explicitly when standard metrics cannot be computed.
 
-Close with a summary table: key metrics, their trend direction (improving / stable / deteriorating), and whether each is a bull factor, bear factor, or neutral for the investment case."""
+Close with a summary table: key metrics, their trend direction (improving / stable / deteriorating), and whether each is a bull factor, bear factor, or neutral for the investment case. Your report ends with this table — do not add investment recommendations, guidance on whether to buy or sell, or suitability assessments for any investor type."""
             + get_language_instruction()
         )
 
