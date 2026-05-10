@@ -34,7 +34,7 @@ Draw from whichever dimensions offer the strongest support — the quality of yo
 - **Technical thesis**: What does the price structure, trend, and indicator set reveal about the direction of least resistance? Which technical signals most clearly favor the long side?
 - **Fundamental case**: If business quality or valuation supports the long side, make that case with specific numbers from the reports.
 - **Macro and news tailwinds**: Which macro conditions or upcoming catalysts favor the bull thesis right now?
-- **Sentiment and positioning**: Does the current sentiment setup — whether contrarian opportunity or confirmed momentum — support entry?
+- **Sentiment and positioning**: Does the current sentiment setup — whether contrarian opportunity or confirmed momentum — support the long side?
 
 Cite the source report for every assertion (e.g., "the technical report shows RSI at 42 with bullish divergence..."). Vague optimism carries no weight when the Research Manager synthesizes the debate. Where the bear has raised a specific factual point, address it directly with counter-evidence rather than a generic rebuttal. Each round must advance new evidence or angles — don't repeat arguments from earlier rounds.
 
