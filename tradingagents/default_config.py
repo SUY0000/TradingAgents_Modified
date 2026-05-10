@@ -97,6 +97,7 @@ DEFAULT_CONFIG = _apply_env_overrides({
         "fundamental_data": "yfinance",      # Options: alpha_vantage, yfinance
         "news_data": "yfinance",             # Options: alpha_vantage, yfinance
         "crypto_market_data": "okx",         # OKX REST API microstructure data (OKX only)
+        "cn_market_data": "akshare",         # A-share specific data (akshare only)
     },
     # Tool-level configuration (takes precedence over category-level)
     "tool_vendors": {

@@ -27,6 +27,23 @@ from .ccxt_data import (
     get_ccxt_stock_data,
     get_ccxt_indicators,
 )
+from .akshare_data import (
+    get_akshare_stock_data,
+    get_akshare_indicators,
+    get_akshare_fundamentals,
+    get_akshare_balance_sheet,
+    get_akshare_cashflow,
+    get_akshare_income_statement,
+    get_akshare_news,
+    get_akshare_global_news,
+    get_akshare_insider_transactions,
+    get_akshare_dragon_tiger,
+    get_akshare_northbound_holding,
+    get_akshare_main_capital_flow,
+    get_akshare_limit_status,
+    get_akshare_sector_performance,
+    get_akshare_margin_balance,
+)
 from .okx_data import (
     get_okx_funding_rate,
     get_okx_open_interest_history,
@@ -83,12 +100,24 @@ TOOLS_CATEGORIES = {
             "get_put_call_ratio",
         ]
     },
+    "cn_market_data": {
+        "description": "A-share specific microstructure data (akshare only): Dragon-Tiger list, northbound holdings, main capital flow, limit-up/down status, sector performance, margin balance",
+        "tools": [
+            "get_dragon_tiger",
+            "get_northbound_holding",
+            "get_main_capital_flow",
+            "get_limit_status",
+            "get_sector_performance",
+            "get_margin_balance",
+        ]
+    },
 }
 
 VENDOR_LIST = [
     "yfinance",
     "alpha_vantage",
     "ccxt",
+    "akshare",
 ]
 
 # Mapping of methods to their vendor-specific implementations
@@ -98,42 +127,70 @@ VENDOR_METHODS = {
         "alpha_vantage": get_alpha_vantage_stock,
         "yfinance": get_YFin_data_online,
         "ccxt": get_ccxt_stock_data,
+        "akshare": get_akshare_stock_data,
     },
     # technical_indicators
     "get_indicators": {
         "alpha_vantage": get_alpha_vantage_indicator,
         "yfinance": get_stock_stats_indicators_window,
         "ccxt": get_ccxt_indicators,
+        "akshare": get_akshare_indicators,
     },
     # fundamental_data
     "get_fundamentals": {
         "alpha_vantage": get_alpha_vantage_fundamentals,
         "yfinance": get_yfinance_fundamentals,
+        "akshare": get_akshare_fundamentals,
     },
     "get_balance_sheet": {
         "alpha_vantage": get_alpha_vantage_balance_sheet,
         "yfinance": get_yfinance_balance_sheet,
+        "akshare": get_akshare_balance_sheet,
     },
     "get_cashflow": {
         "alpha_vantage": get_alpha_vantage_cashflow,
         "yfinance": get_yfinance_cashflow,
+        "akshare": get_akshare_cashflow,
     },
     "get_income_statement": {
         "alpha_vantage": get_alpha_vantage_income_statement,
         "yfinance": get_yfinance_income_statement,
+        "akshare": get_akshare_income_statement,
     },
     # news_data
     "get_news": {
         "alpha_vantage": get_alpha_vantage_news,
         "yfinance": get_news_yfinance,
+        "akshare": get_akshare_news,
     },
     "get_global_news": {
         "yfinance": get_global_news_yfinance,
         "alpha_vantage": get_alpha_vantage_global_news,
+        "akshare": get_akshare_global_news,
     },
     "get_insider_transactions": {
         "alpha_vantage": get_alpha_vantage_insider_transactions,
         "yfinance": get_yfinance_insider_transactions,
+        "akshare": get_akshare_insider_transactions,
+    },
+    # cn_market_data — akshare only
+    "get_dragon_tiger": {
+        "akshare": get_akshare_dragon_tiger,
+    },
+    "get_northbound_holding": {
+        "akshare": get_akshare_northbound_holding,
+    },
+    "get_main_capital_flow": {
+        "akshare": get_akshare_main_capital_flow,
+    },
+    "get_limit_status": {
+        "akshare": get_akshare_limit_status,
+    },
+    "get_sector_performance": {
+        "akshare": get_akshare_sector_performance,
+    },
+    "get_margin_balance": {
+        "akshare": get_akshare_margin_balance,
     },
     # crypto_market_data — OKX only
     "get_funding_rate": {
