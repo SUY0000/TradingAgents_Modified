@@ -8,7 +8,7 @@ Config fields: none specific (uses data_cache_dir from global config).
 
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from typing import Annotated, Literal
 
@@ -302,8 +302,8 @@ def get_akshare_income_statement(
 
 def get_akshare_news(
     ticker: Annotated[str, "A-share ticker, e.g. 600519.SH"],
-    curr_date: Annotated[str, "Current date, YYYY-mm-dd"],
-    look_back_days: Annotated[int, "Days to look back"] = 7,
+    start_date: Annotated[str, "Start date, YYYY-mm-dd"],
+    end_date: Annotated[str, "End date, YYYY-mm-dd"],
     **kwargs,
 ) -> str:
     """Fetch A-share company news via akshare 东方财富."""
@@ -316,16 +316,16 @@ def get_akshare_news(
         if df.empty:
             return f"No news found for {ticker}"
 
-        curr_dt = datetime.strptime(curr_date, "%Y-%m-%d")
-        start_dt = curr_dt - relativedelta(days=look_back_days)
+        start_dt = datetime.strptime(start_date, "%Y-%m-%d")
+        end_dt = datetime.strptime(end_date, "%Y-%m-%d")
 
         date_col = next((c for c in df.columns if "时间" in c or "日期" in c), None)
         if date_col:
             df["_dt"] = pd.to_datetime(df[date_col], errors="coerce")
-            df = df[(df["_dt"] >= start_dt) & (df["_dt"] <= curr_dt + relativedelta(days=1))]
+            df = df[(df["_dt"] >= start_dt) & (df["_dt"] <= end_dt + timedelta(days=1))]
 
         if df.empty:
-            return f"No news found for {ticker} in the last {look_back_days} days before {curr_date}"
+            return f"No news found for {ticker} between {start_date} and {end_date}"
 
         title_col = next((c for c in df.columns if "标题" in c), df.columns[0])
         content_col = next((c for c in df.columns if "内容" in c), None)
@@ -341,7 +341,7 @@ def get_akshare_news(
                 news_str += f"{str(row[content_col])[:300]}...\n"
             news_str += "\n"
 
-        return f"## {ticker} News, from {start_dt.strftime('%Y-%m-%d')} to {curr_date}:\n\n{news_str}"
+        return f"## {ticker} News, from {start_date} to {end_date}:\n\n{news_str}"
     except Exception as e:
         return f"Error fetching news for {ticker}: {str(e)}"
 
