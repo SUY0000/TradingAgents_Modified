@@ -349,6 +349,7 @@ def get_akshare_news(
 def get_akshare_global_news(
     curr_date: Annotated[str, "Current date, YYYY-mm-dd"],
     look_back_days: Annotated[int, "Days to look back"] = 7,
+    limit: Annotated[int, "Max articles to return"] = 20,
     **kwargs,
 ) -> str:
     """Fetch A-share macro/economic news via akshare (百度财经)."""
@@ -361,7 +362,7 @@ def get_akshare_global_news(
             return f"No global news found for {curr_date}"
 
         news_str = ""
-        for _, row in df.head(20).iterrows():
+        for _, row in df.head(limit).iterrows():
             title = str(row.iloc[0]) if len(row) > 0 else "No title"
             summary = str(row.iloc[1])[:300] if len(row) > 1 else ""
             news_str += f"### {title}\n"
