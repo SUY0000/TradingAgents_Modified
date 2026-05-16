@@ -25,22 +25,25 @@ def get_global_news(
     curr_date: Annotated[str, "Current date in yyyy-mm-dd format"],
     look_back_days: Annotated[Optional[int], "Days to look back; omit to use the configured default"] = None,
     limit: Annotated[Optional[int], "Max articles to return; omit to use the configured default"] = None,
+    ticker: Annotated[str, "Ticker symbol of the stock being analyzed (used for sector-filtered policy news in A-share mode)"] = None,
 ) -> str:
     """
-    Retrieve global news data.
+    Retrieve global / macro news data.
+    In A-share mode (akshare vendor), news is sourced from CCTV daily transcripts
+    and filtered by the stock's Shenwan industry sector keywords so that only
+    policy and macro items relevant to this sector are returned.
+    In US-stock / crypto mode, returns general global macro news.
     Uses the configured news_data vendor. Defaults for look_back_days and
-    limit come from DEFAULT_CONFIG (global_news_lookback_days,
-    global_news_article_limit); pass explicit values to override.
-
+    limit come from DEFAULT_CONFIG when not specified.
     Args:
         curr_date (str): Current date in yyyy-mm-dd format
         look_back_days (int): Number of days to look back; omit to inherit config
         limit (int): Maximum number of articles to return; omit to inherit config
-
+        ticker (str): Ticker of the stock being analyzed (pass the same ticker used for get_news)
     Returns:
-        str: A formatted string containing global news data
+        str: A formatted string containing global/sector news data
     """
-    return route_to_vendor("get_global_news", curr_date, look_back_days, limit)
+    return route_to_vendor("get_global_news", curr_date, look_back_days, limit, ticker=ticker)
 
 @tool
 def get_insider_transactions(

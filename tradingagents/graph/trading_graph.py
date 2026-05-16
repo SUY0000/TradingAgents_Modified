@@ -205,31 +205,38 @@ class TradingAgentsGraph:
                 get_a_share_sector_performance,
                 get_a_share_margin_balance,
             ]
+        social_tools = [get_news]
+        fundamentals_tools = [get_fundamentals, get_balance_sheet, get_cashflow, get_income_statement]
+
+        if is_a_share:
+            from tradingagents.agents.utils.cn_sentiment_tools import (
+                get_a_share_hot_rank_history,
+                get_a_share_research_reports,
+                get_a_share_institutional_research,
+            )
+            social_tools = [
+                get_a_share_hot_rank_history,
+                get_a_share_research_reports,
+                get_a_share_institutional_research,
+            ]
+            from tradingagents.agents.utils.fundamental_data_tools import (
+                get_earnings_forecast,
+                get_shareholder_count,
+                get_valuation_comparison,
+            )
+            fundamentals_tools += [get_earnings_forecast, get_shareholder_count, get_valuation_comparison]
+
         return {
             "market": ToolNode(market_tools),
-            "social": ToolNode(
-                [
-                    # News tools for social media analysis
-                    get_news,
-                ]
-            ),
+            "social": ToolNode(social_tools),
             "news": ToolNode(
                 [
-                    # News and insider information
                     get_news,
                     get_global_news,
                     get_insider_transactions,
                 ]
             ),
-            "fundamentals": ToolNode(
-                [
-                    # Fundamental analysis tools
-                    get_fundamentals,
-                    get_balance_sheet,
-                    get_cashflow,
-                    get_income_statement,
-                ]
-            ),
+            "fundamentals": ToolNode(fundamentals_tools),
         }
 
     def _resolve_benchmark(self, ticker: str) -> str:

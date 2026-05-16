@@ -38,9 +38,9 @@ def _seven_days_back(trade_date: str) -> str:
 def create_sentiment_analyst(llm):
     """Create a sentiment analyst node for the trading graph.
 
-    Pre-fetches news + StockTwits + Reddit data, injects them into the
-    prompt as structured blocks, and produces a sentiment report in a
-    single LLM call.
+    For US/crypto tickers: pre-fetches news + StockTwits + Reddit data.
+    For A-share tickers: pre-fetches three-layer sentiment (retail/sell-side/buy-side).
+    Data is injected into the prompt as structured blocks for a single LLM call.
     """
 
     def sentiment_analyst_node(state):
@@ -49,21 +49,44 @@ def create_sentiment_analyst(llm):
         start_date = _seven_days_back(end_date)
         instrument_context = build_instrument_context(ticker)
 
-        # Pre-fetch all three sources. Each fetcher degrades gracefully and
-        # returns a string (no exceptions surface from here), so the LLM
-        # always sees something — either real data or a clear placeholder.
-        news_block = get_news.func(ticker, start_date, end_date)
-        stocktwits_block = fetch_stocktwits_messages(ticker, limit=30)
-        reddit_block = fetch_reddit_posts(ticker)
-
-        system_message = _build_system_message(
-            ticker=ticker,
-            start_date=start_date,
-            end_date=end_date,
-            news_block=news_block,
-            stocktwits_block=stocktwits_block,
-            reddit_block=reddit_block,
+        from tradingagents.dataflows.config import get_config
+        vendors = get_config().get("data_vendors", {})
+        is_a_share = (
+            vendors.get("core_stock_apis") == "akshare"
+            and vendors.get("technical_indicators") == "akshare"
         )
+
+        if is_a_share:
+            from tradingagents.agents.utils.cn_sentiment_tools import (
+                get_a_share_hot_rank_history,
+                get_a_share_research_reports,
+                get_a_share_institutional_research,
+            )
+            retail_block = get_a_share_hot_rank_history.func(ticker, end_date, look_back_days=30)
+            sell_side_block = get_a_share_research_reports.func(ticker, end_date, look_back_days=90)
+            buy_side_block = get_a_share_institutional_research.func(ticker, end_date, look_back_days=180)
+            system_message = _build_a_share_system_message(
+                ticker=ticker,
+                end_date=end_date,
+                retail_block=retail_block,
+                sell_side_block=sell_side_block,
+                buy_side_block=buy_side_block,
+            )
+        else:
+            # Pre-fetch all three sources. Each fetcher degrades gracefully and
+            # returns a string (no exceptions surface from here), so the LLM
+            # always sees something — either real data or a clear placeholder.
+            news_block = get_news.func(ticker, start_date, end_date)
+            stocktwits_block = fetch_stocktwits_messages(ticker, limit=30)
+            reddit_block = fetch_reddit_posts(ticker)
+            system_message = _build_system_message(
+                ticker=ticker,
+                start_date=start_date,
+                end_date=end_date,
+                news_block=news_block,
+                stocktwits_block=stocktwits_block,
+                reddit_block=reddit_block,
+            )
 
         prompt = ChatPromptTemplate.from_messages(
             [
@@ -160,6 +183,50 @@ Produce a sentiment report covering, in order:
 5. **Markdown table** at the end summarizing key sentiment signals, their direction, source, and supporting evidence.
 
 {get_language_instruction()}"""
+
+
+def _build_a_share_system_message(
+    *,
+    ticker: str,
+    end_date: str,
+    retail_block: str,
+    sell_side_block: str,
+    buy_side_block: str,
+) -> str:
+    """Assemble the A-share sentiment-analyst system message with three-layer data."""
+    return f"""You are the market sentiment and narrative specialist on this trading team, focused on A-share (China mainland) markets. Your report reads the collective psychology of three distinct layers of market participants and determines whether their combined sentiment is a tailwind, headwind, or contrarian signal for the investment decision ahead.
+
+The following data has already been collected for you as of {end_date}:
+
+## Retail layer — East Money popularity ranking trend (past 30 days)
+
+<start_of_retail>
+{retail_block}
+<end_of_retail>
+
+## Sell-side layer — Broker research reports and rating consensus (past 90 days)
+
+<start_of_sell_side>
+{sell_side_block}
+<end_of_sell_side>
+
+## Buy-side layer — Institutional on-site research visits (past 180 days)
+
+<start_of_buy_side>
+{buy_side_block}
+<end_of_buy_side>
+
+## Analysis Framework
+
+**Retail attention (散户层)**: Is retail interest rising or falling? Rising popularity rank with stagnant or falling price is a crowding warning. Falling retail attention during a price rally can signal a healthy, institution-led move.
+
+**Sell-side consensus (卖方层)**: What is the dominant broker rating? Are there recent upgrades or downgrades? Concentrated "买入" ratings at highs can be a contrarian warning; downgrades near lows can signal washout. Track earnings forecast direction (are EPS estimates being revised up or down?).
+
+**Buy-side engagement (买方层)**: How many institutional visits have occurred recently? High visit frequency from fund managers and analysts signals strong institutional interest. Sudden drop in visits can signal waning conviction. Note the most recent visit date — recency matters.
+
+**Three-layer synthesis**: When all three layers align (e.g., falling retail + firm sell-side + heavy buy-side visits = institutional accumulation under the radar), the signal is high-conviction. When layers diverge, explain the divergence and its implications.
+
+Close with a three-layer summary table (retail / sell-side / buy-side: each rated bullish / neutral / bearish with one-sentence rationale) and an overall net sentiment verdict. Your report ends with this table — do not add investment recommendations, entry/exit guidance, or sizing advice.{get_language_instruction()}"""
 
 
 # ---------------------------------------------------------------------------

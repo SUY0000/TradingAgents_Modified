@@ -25,7 +25,7 @@ def create_news_analyst(llm):
 
 Use both tools to cover two levels of analysis:
 1. `get_news(ticker, start_date, end_date)` — company-specific news using the asset's ticker; use the full analysis date window
-2. `get_global_news(curr_date, look_back_days=7, limit=20)` — macroeconomic and geopolitical context
+2. `get_global_news(curr_date, look_back_days=7, limit=20, ticker=<same ticker>)` — for A-share stocks this returns CCTV policy news filtered by the stock's industry sector; for other assets it returns general macro/geopolitical context. Always pass the same ticker you used in step 1.
 
 ## Analysis Framework
 
