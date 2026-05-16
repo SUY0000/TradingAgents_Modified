@@ -1029,10 +1029,11 @@ def get_okx_liquidation_orders(inst_type: str, ccy: str) -> str:
         Aggregated liquidation summary by side (long/short) and 24h bucket.
         Shows total liquidated USD notional + largest single liquidation.
     """
+    uly = f"{ccy.upper()}-USDT"
     try:
         data = _okx_request("/api/v5/public/liquidation-orders", {
             "instType": inst_type,
-            "ccy": ccy.upper(),
+            "uly": uly,
             "state": "filled",
         })
     except Exception as exc:
