@@ -8,7 +8,6 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-_API_BASE = "https://cryptopanic.com/api/developer/v2"
 _CACHE: dict = {}
 _CACHE_TTL = 900  # 15 minutes
 
@@ -38,17 +37,28 @@ def get_cryptopanic_news(currency: str, curr_date: str, look_back_days: int = 7,
         return _CACHE[key]["data"]
 
     api_key = os.environ.get("CRYPTOPANIC_API_KEY", "")
+    if not api_key:
+        result = (
+            f"[CryptoPanic] No API key configured (CRYPTOPANIC_API_KEY). "
+            f"CryptoPanic v2 requires auth_token in all requests. "
+            f"Register at https://cryptopanic.com/developers/api to get a key."
+        )
+        _CACHE[key] = {"ts": time.time(), "data": result}
+        return result
+
+    api_plan = os.environ.get("CRYPTOPANIC_API_PLAN", "developer")
+    api_base = f"https://cryptopanic.com/api/{api_plan}/v2"
+
     params = {
+        "auth_token": api_key,
         "currencies": currency.upper(),
         "public": "true",
         "kind": "news",
         "regions": "en",
     }
-    if api_key:
-        params["auth_token"] = api_key
 
     try:
-        resp = requests.get(f"{_API_BASE}/posts/", params=params, timeout=10)
+        resp = requests.get(f"{api_base}/posts/", params=params, timeout=10)
         resp.raise_for_status()
         data = resp.json()
     except Exception as exc:

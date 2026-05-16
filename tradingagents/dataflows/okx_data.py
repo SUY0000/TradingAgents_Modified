@@ -689,7 +689,7 @@ def get_okx_aggregated_oi_volume(
     symbol: Annotated[str, "ticker symbol (ccxt_symbol in config overrides)"],
     start_date: Annotated[str, "Start date in yyyy-mm-dd format"],
     end_date: Annotated[str, "End date in yyyy-mm-dd format"],
-    period: str = "4H",
+    period: str = "1H",
     **kwargs,
 ) -> str:
     """Fetch aggregated open interest and trading volume from OKX.
@@ -714,7 +714,7 @@ def get_okx_aggregated_oi_volume(
     symbol = _resolve_okx_symbol(symbol)
     ccy = _to_ccy(symbol)
     begin_ms = _date_to_ms(start_date)
-    end_ms = _date_to_ms(end_date) + 86_400_000
+    end_ms = min(_date_to_ms(end_date) + 86_400_000, int(time.time() * 1000))
 
     cache_file = _cache_path(f"agg_oi_vol_{period}", symbol, start_date, end_date)
     cached = _load_cache(cache_file)
