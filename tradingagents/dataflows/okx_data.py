@@ -1079,7 +1079,8 @@ def get_okx_liquidation_orders(inst_type: str, ccy: str) -> str:
 def get_okx_announcements(ccy: str, curr_date: str, look_back_days: int = 14) -> str:
     """Fetch OKX exchange announcements filtered for a currency.
 
-    No annType filter — fetches all and client-side filters by currency keyword.
+    Fetches all recent announcements and client-side filters by currency keyword.
+    The API nests individual notices inside data[*]["details"][*].
     Returns listings, delistings, suspensions, and rule changes.
     """
     try:
@@ -1090,24 +1091,46 @@ def get_okx_announcements(ccy: str, curr_date: str, look_back_days: int = 14) ->
         return "[OKX announcements] No announcements found."
 
     ccy_upper = ccy.upper()
+    # Build keyword set: base currency + common full names
+    _NAME_MAP = {
+        "BTC": ["BITCOIN"], "ETH": ["ETHEREUM"], "SOL": ["SOLANA"],
+        "BNB": ["BINANCE"], "XRP": ["RIPPLE"], "ADA": ["CARDANO"],
+        "DOGE": ["DOGECOIN"], "AVAX": ["AVALANCHE"], "DOT": ["POLKADOT"],
+        "MATIC": ["POLYGON"], "LINK": ["CHAINLINK"], "UNI": ["UNISWAP"],
+    }
+    keywords = {ccy_upper} | set(_NAME_MAP.get(ccy_upper, []))
+
+    cutoff_ts = None
+    try:
+        cutoff_ts = datetime.strptime(curr_date, "%Y-%m-%d").replace(tzinfo=timezone.utc).timestamp()
+        cutoff_ts -= look_back_days * 86400
+    except Exception:
+        pass
+
     relevant = []
     for item in data:
-        title = item.get("title", "")
-        ann_date = item.get("pTime", "")
-        try:
-            ann_ts = int(ann_date) / 1000
-            ann_dt = datetime.fromtimestamp(ann_ts, tz=timezone.utc).strftime("%Y-%m-%d")
-        except Exception:
-            ann_dt = ann_date
-        if ccy_upper in title.upper() or not ccy:
-            relevant.append(f"  [{ann_dt}] {title}")
+        for ann in item.get("details", []):
+            title = ann.get("title", "")
+            p_time = ann.get("pTime", "")
+            try:
+                ann_ts = int(p_time) / 1000
+                ann_dt = datetime.fromtimestamp(ann_ts, tz=timezone.utc).strftime("%Y-%m-%d")
+                if cutoff_ts and ann_ts < cutoff_ts:
+                    continue
+            except Exception:
+                ann_dt = p_time
+            title_upper = title.upper()
+            if not ccy or any(kw in title_upper for kw in keywords):
+                relevant.append(f"  [{ann_dt}] {title}")
+            if len(relevant) >= 10:
+                break
         if len(relevant) >= 10:
             break
 
     if not relevant:
         return f"[OKX announcements] No announcements matching {ccy_upper} in recent {look_back_days}d."
 
-    return f"OKX Exchange Announcements ({ccy_upper}, recent):\n" + "\n".join(relevant)
+    return f"OKX Exchange Announcements ({ccy_upper}, recent {look_back_days}d):\n" + "\n".join(relevant)
 
 
 @okx_request_limiter(delay_ms=200)
