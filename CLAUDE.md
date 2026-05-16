@@ -236,7 +236,7 @@ print(decision)  # One of: BUY, OVERWEIGHT, HOLD, UNDERWEIGHT, SELL
 - `ConditionalLogic` methods on `state["messages"][-1].tool_calls` determine if an analyst needs more tool calls or should proceed.
 - Debate round counting: investment debate uses `2 * max_debate_rounds` (2 agents), risk debate uses `3 * max_risk_discuss_rounds` (3 agents).
 - `tool_vendors` overrides `data_vendors` — tool-level config takes precedence over category-level.
-- `output_language` 覆盖范围：产生用户可见字段的节点需调用 `get_language_instruction()`——4个analysts、`research_manager`（`investment_plan`）、`trader`（`trader_investment_plan`）、`portfolio_manager`；纯辩论节点（bull/bear researchers、risk debators）按设计保持英语，不加此调用。
+- `output_language` 覆盖范围（v0.2.5 起）：所有输出节点均调用 `get_language_instruction()`——4个analysts、bull/bear researchers、risk debators、`research_manager`（`investment_plan`）、`trader`（`trader_investment_plan`）、`portfolio_manager`。v0.2.5 前的行为是辩论节点保持英语，但 upstream 已通过 feat(i18n) 将多语言扩展到全部 agents。
 - `SignalProcessor` uses `quick_thinking_llm` (not regex) to extract the 5-tier rating from verbose text.
 - Memory uses BM25 (offline, no API calls) — no embedding model needed.
 - `TradingAgentsGraph.__init__` calls `set_config()` on the dataflows interface, so config changes after init won't propagate to data routing.
@@ -275,5 +275,6 @@ print(decision)  # One of: BUY, OVERWEIGHT, HOLD, UNDERWEIGHT, SELL
 - **A 股 OHLCV 默认 `adjust="qfq"`（前复权）**，与美股 yfinance 默认行为一致。`get_akshare_limit_status` 基于每日收盘价涨跌幅推算（≥+9.9% = 涨停，≤-9.9% = 跌停），不调用额外 API，无需注意限流。
 - **akshare 重试机制**: `akshare_common.py::akshare_retry()` 提供指数退避（2→4→8s，最多 3 次），内置 0.5s pre-call throttle（替代原 `_throttle()`）。只重试 requests 网络异常和 JSONDecodeError / KeyError；编程错误（TypeError 等）立即传播。耗尽后抛 `AkshareNetworkError`，vendor 函数的 outer try/except 将其转字符串返回 LLM。
 - **`news_cctv` 行业过滤原理**: `get_akshare_global_news` 替换了 `news_economic_baidu`（已停更），改为每日循环调用 `ak.news_cctv(date=YYYYMMDD)` 并用股票所属 Shenwan 行业名及其 2 字前缀做 substring 匹配过滤。`stock_hot_rank_detail_em` 需要 `exchange_prefix` 格式（`SH601127`）；`stock_research_report_em` 需要 6 位数字格式（`601127`）。
-- **A 股 social analyst 工具集切换**: A 股模式下 social_analyst 加载 `cn_sentiment_tools.py` 中的三层情绪工具（retail/sell-side/buy-side），而非 `get_news × 3 窗口`；`cn_sentiment_data` 需在 config `data_vendors` 中设为 `akshare`（CLI 选择 a_share 后 6 个 vendor 均自动设置）。
+- **`sentiment_analyst` 架构（v0.2.5）**: `social_media_analyst` 已重命名为 `sentiment_analyst`（`tradingagents/agents/analysts/sentiment_analyst.py`）；`social_media_analyst.py` 现为 backwards-compatibility shim。新设计**预取**数据后注入 prompt（无 tool-calling）：US/Crypto 模式预取 Yahoo Finance news + StockTwits + Reddit；A 股模式预取三层情绪数据（retail hot-rank / sell-side research / buy-side institutional visits）。对应 `_build_system_message()` 和 `_build_a_share_system_message()` 两个构建函数。
+- **A 股 sentiment analyst 工具集切换**: A 股模式（`core_stock_apis == "akshare"` 且 `technical_indicators == "akshare"`）下 `sentiment_analyst` 从 `cn_sentiment_tools.py` 预取三层情绪数据（retail/sell-side/buy-side），而非 Yahoo Finance + StockTwits + Reddit；`cn_sentiment_data` 需在 config `data_vendors` 中设为 `akshare`（CLI 选择 a_share 后 6 个 vendor 均自动设置）。
 - **A 股 fundamentals 追加工具**: A 股模式下 fundamentals_analyst 在四张表基础上追加 `get_earnings_forecast` / `get_shareholder_count` / `get_valuation_comparison`；这三个工具归属 `fundamental_data` category（与四张表共用 akshare vendor）。`get_earnings_forecast` 遍历最近 8 个季报日期（向前回溯 2 年）以找到有预告记录的期间。
