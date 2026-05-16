@@ -1047,6 +1047,7 @@ def run_analysis(checkpoint: bool = False):
         config["data_vendors"]["news_data"] = "akshare"
         config["data_vendors"]["fundamental_data"] = "akshare"
         config["data_vendors"]["cn_market_data"] = "akshare"
+        config["data_vendors"]["cn_sentiment_data"] = "akshare"
 
     # Create stats callback handler for tracking LLM/tool calls
     stats_handler = StatsCallbackHandler()
