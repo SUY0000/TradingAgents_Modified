@@ -68,6 +68,20 @@ def create_sentiment_analyst(llm):
                 sell_side_block=sell_side_block,
                 buy_side_block=buy_side_block,
             )
+        elif asset_type == "crypto":
+            from tradingagents.dataflows.alternative_me_data import get_fear_greed_block
+            from tradingagents.dataflows.coingecko_data import get_coingecko_sentiment_block
+            from tradingagents.dataflows.crypto_symbols import get_cg_id
+            fg_block = get_fear_greed_block(end_date, look_back_days=30)
+            cg_id = get_cg_id(ticker)
+            votes_block = get_coingecko_sentiment_block(cg_id)
+            system_message = _build_crypto_system_message(
+                ticker=ticker,
+                start_date=start_date,
+                end_date=end_date,
+                fg_block=fg_block,
+                votes_block=votes_block,
+            )
         else:
             # Pre-fetch all three sources. Each fetcher degrades gracefully and
             # returns a string (no exceptions surface from here), so the LLM
@@ -75,8 +89,7 @@ def create_sentiment_analyst(llm):
             news_block = get_news.func(ticker, start_date, end_date)
             stocktwits_block = fetch_stocktwits_messages(ticker, limit=30)
             reddit_block = fetch_reddit_posts(ticker)
-            builder = _build_crypto_system_message if asset_type == "crypto" else _build_stock_system_message
-            system_message = builder(
+            system_message = _build_stock_system_message(
                 ticker=ticker,
                 start_date=start_date,
                 end_date=end_date,
@@ -149,28 +162,32 @@ def _build_crypto_system_message(
     ticker: str,
     start_date: str,
     end_date: str,
-    news_block: str,
-    stocktwits_block: str,
-    reddit_block: str,
+    fg_block: str,
+    votes_block: str,
 ) -> str:
-    """Assemble the crypto sentiment prompt."""
+    """Assemble the crypto sentiment prompt with Fear & Greed + CoinGecko vote data."""
     return f"""You are the crypto sentiment and reflexivity analyst for {ticker}. Your task is to read whether narratives, crowd positioning, and community attention are creating a tailwind, a liquidation-prone crowded trade, or a fading story. Crypto sentiment is reflexive: social conviction can drive flows, but crowded conviction can also become fuel for violent reversals.
 
-The evidence below covers {start_date} through {end_date}. Yahoo/news headlines reflect institutional and regulatory framing; StockTwits captures short-horizon trader bias; Reddit captures community narratives and conviction. Use them alongside the knowledge that crypto markets trade continuously, react sharply to liquidity, leverage, exchange flows, regulation, ETF/macro headlines, protocol events, and token-specific unlock/supply narratives.
+The evidence below covers {start_date} through {end_date} and is sourced from crypto-native sentiment data.
 
-<news_headlines>
-{news_block}
-</news_headlines>
+<fear_greed_index>
+{fg_block}
+</fear_greed_index>
 
-<stocktwits_messages>
-{stocktwits_block}
-</stocktwits_messages>
+<coingecko_community_votes>
+{votes_block}
+</coingecko_community_votes>
 
-<reddit_posts>
-{reddit_block}
-</reddit_posts>
+Read the two sources together. The Fear & Greed Index captures broad market mood across the crypto space — extreme fear often coincides with capitulation bottoms; extreme greed coincides with overleveraged tops. The CoinGecko community votes and watchlist data show platform-specific attention and directional bias for this asset specifically.
 
-Focus on the narrative that could move marginal buyers or sellers now: risk-on/risk-off appetite, regulatory or ETF flow headlines, protocol adoption, security incidents, tokenomics, leverage euphoria, capitulation, and whether retail is chasing after the move or quietly accumulating before confirmation. Treat missing or thin social data as an analytical signal about attention, not as permission to speculate.
+Focus on:
+- Is fear/greed extreme (below 20 or above 80)? Extreme readings often revert.
+- Is the 7d vs 30d average diverging? Short-term mood shifting relative to baseline.
+- Do platform votes align with the broader F&G reading, or do they diverge?
+- Is watchlist growth accelerating (new attention) or plateauing (mature position)?
+- What is the community size trend — Twitter/Reddit/Telegram engagement as adoption proxy?
+
+Treat missing or thin data as an analytical signal about attention, not as permission to speculate.
 
 Write a focused crypto sentiment report that separates durable narrative from hype. Explain whether sentiment is constructive, fragile, overheated, washed out, or irrelevant because liquidity/macro dominates. Close with a compact summary table covering source, direction, conviction, and the decisive narrative or positioning clue. Your report ends with that table; do not add trade recommendations, entry/exit guidance, or sizing advice.{get_language_instruction()}"""
 

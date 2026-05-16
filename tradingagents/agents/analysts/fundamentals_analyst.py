@@ -8,6 +8,11 @@ from tradingagents.agents.utils.agent_utils import (
     get_income_statement,
     get_language_instruction,
 )
+from tradingagents.agents.utils.crypto_fundamental_tools import (
+    get_token_profile,
+    get_protocol_metrics,
+    get_public_borrow,
+)
 
 
 def create_fundamentals_analyst(llm):
@@ -17,13 +22,21 @@ def create_fundamentals_analyst(llm):
 
         asset_type = get_asset_type()
         is_a_share = asset_type == "a_share"
+        is_crypto = asset_type == "crypto"
 
-        tools = [
-            get_fundamentals,
-            get_balance_sheet,
-            get_cashflow,
-            get_income_statement,
-        ]
+        if is_crypto:
+            tools = [
+                get_token_profile,
+                get_protocol_metrics,
+                get_public_borrow,
+            ]
+        else:
+            tools = [
+                get_fundamentals,
+                get_balance_sheet,
+                get_cashflow,
+                get_income_statement,
+            ]
 
         if is_a_share:
             from tradingagents.agents.utils.fundamental_data_tools import (
@@ -72,11 +85,19 @@ def create_fundamentals_analyst(llm):
 def _build_system_message(asset_type: str) -> str:
     language = get_language_instruction()
     if asset_type == "crypto":
-        return f"""You are the crypto fundamentals analyst. Traditional equity statements may be sparse or economically irrelevant here, so your job is to extract whatever the configured fundamentals tools can provide, then judge the asset through crypto-native economics: network usage, protocol revenue where available, token supply, issuance/unlocks, ecosystem traction, developer/community durability, security/regulatory risk, and whether value capture actually accrues to the token.
+        return f"""You are the crypto fundamentals analyst. Your job is to assess token economics through crypto-native lenses: supply discipline, developer durability, protocol revenue, ecosystem traction, and on-exchange capital cost.
 
-Call all four fundamentals tools. If a financial statement is unavailable or not meaningful for this crypto ticker, say so plainly and do not force equity ratios onto a token. Use any available company/security information only as context; the central question is whether the token or crypto asset has durable demand, credible supply discipline, and identifiable catalysts or vulnerabilities.
+You have three crypto-native tools — call all three:
+- `get_token_profile(ticker)` — CoinGecko data: market cap, FDV, circulating/total/max supply, 7d/30d price change, GitHub developer activity (stars, forks, commits, contributors), and community size (Twitter, Reddit, Telegram).
+- `get_protocol_metrics(ticker)` — DefiLlama data: TVL, 24h/7d fees, protocol revenue. For non-DeFi assets (BTC, XRP etc.), the tool will say so; note it and move on.
+- `get_public_borrow(ticker)` — OKX savings borrow rate and available depth. High rate + low availability signals strong short demand or supply scarcity.
 
-Write a fundamentals report that separates hard data from absent data. Explain the economic model, supply/demand pressure, quality of adoption, balance-sheet or issuer risk if relevant, and the largest fundamental uncertainty. Close with a compact table of fundamental factors, direction, evidence quality, and bull/bear/neutral classification. Your report ends there; do not add investment recommendations, entry/exit guidance, or sizing advice.{language}"""
+The central question for each tool:
+  Token profile: Is supply inflation controlled? Is developer activity growing or declining? Is community engagement durable?
+  Protocol metrics: Is there real economic activity? Does revenue justify the FDV? Is TVL growing?
+  Borrow info: Is there capital-cost pressure on this asset? What does the lending market signal about short interest?
+
+Write a fundamentals report that separates hard data from inferences. Explain the economic model, supply/demand pressure, quality of adoption, protocol health or absence, and the largest fundamental uncertainty. Close with a compact table of fundamental factors, direction, evidence quality, and bull/bear/neutral classification. Your report ends there; do not add investment recommendations, entry/exit guidance, or sizing advice.{language}"""
 
     if asset_type == "a_share":
         return f"""You are the A-share fundamental research specialist. Your job is to decide whether the current market narrative is supported by business quality, earnings trajectory, balance-sheet resilience, shareholder structure, and valuation versus domestic peers.

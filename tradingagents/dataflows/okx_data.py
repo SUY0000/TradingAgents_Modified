@@ -865,3 +865,436 @@ def get_okx_mark_price(
 ) -> str:
     """Mark price OHLCV is covered by ccxt_data.py; redirects to aggregated OI+volume."""
     return get_okx_aggregated_oi_volume(symbol, start_date, end_date, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# PR-2 Market Extensions
+# ---------------------------------------------------------------------------
+
+@okx_request_limiter(delay_ms=200)
+def get_okx_ticker(inst_id: str) -> str:
+    """Fetch spot/swap 24h ticker snapshot from OKX /market/ticker.
+
+    Returns compact text block with last price, 24h high/low/volume/change.
+    """
+    symbol = _resolve_okx_symbol(inst_id)
+    # Prefer spot ticker for price reference
+    spot_id = _to_spot_id(symbol)
+    rows = []
+    for iid in [spot_id, _to_inst_id(symbol)]:
+        try:
+            data = _okx_request("/api/v5/market/ticker", {"instId": iid})
+            if data:
+                d = data[0]
+                rows.append(
+                    f"  {iid}: last={d.get('last')} open24h={d.get('open24h')} "
+                    f"high24h={d.get('high24h')} low24h={d.get('low24h')} "
+                    f"vol24h={d.get('vol24h')} volCcy24h={d.get('volCcy24h')} "
+                    f"ts={d.get('ts')}"
+                )
+        except Exception as exc:
+            rows.append(f"  {iid}: error — {exc}")
+    if not rows:
+        return "[OKX ticker] No data."
+    return "OKX 24h Ticker Snapshot:\n" + "\n".join(rows)
+
+
+def _to_spot_id(symbol: str) -> str:
+    """Convert to OKX spot instId, e.g. BTC/USDT -> BTC-USDT."""
+    sym = symbol.split(":")[0].replace("-SWAP", "").replace("-FUTURES", "")
+    base_quote = sym.replace("/", "-")
+    if "-" not in base_quote:
+        base_quote = f"{base_quote}-USDT"
+    return base_quote
+
+
+@okx_request_limiter(delay_ms=200)
+def get_okx_mark_price_candles(inst_id: str, bar: str = "1H") -> str:
+    """Fetch mark-price candles from OKX to derive perpetual vs. spot basis.
+
+    Args:
+        inst_id: Swap instId, e.g. "BTC-USDT-SWAP"
+        bar: Candle bar size: 1m, 3m, 5m, 15m, 30m, 1H, 2H, 4H, 6H, 1D
+
+    Returns:
+        Compact basis summary (mark - index price) for last 24 periods.
+    """
+    symbol = _resolve_okx_symbol(inst_id)
+    swap_id = _to_inst_id(symbol)
+    try:
+        data = _okx_request("/api/v5/market/mark-price-candles", {"instId": swap_id, "bar": bar, "limit": "24"})
+    except Exception as exc:
+        return f"[OKX mark-price-candles] Error: {exc}"
+    if not data:
+        return "[OKX mark-price-candles] No data."
+
+    # data format: [ts, open, high, low, close, confirm]
+    rows = []
+    for candle in data[:12]:  # last 12 periods
+        ts, o, h, l, c = candle[0], candle[1], candle[2], candle[3], candle[4]
+        try:
+            dt = datetime.fromtimestamp(int(ts) / 1000, tz=timezone.utc).strftime("%m-%d %H:%M")
+        except Exception:
+            dt = ts
+        rows.append(f"  {dt}: mark_close={c}")
+
+    return f"OKX Mark Price Candles ({swap_id}, {bar}, last 12 periods):\n" + "\n".join(rows)
+
+
+@okx_request_limiter(delay_ms=200)
+def get_okx_funding_rate_now(inst_id: str) -> str:
+    """Fetch current and next funding rate from OKX /public/funding-rate.
+
+    Provides current funding rate, next funding rate, and settlement time.
+    Complements get_okx_funding_rate (historical) with forward-looking data.
+    """
+    symbol = _resolve_okx_symbol(inst_id)
+    swap_id = _to_inst_id(symbol)
+    try:
+        data = _okx_request("/api/v5/public/funding-rate", {"instId": swap_id})
+    except Exception as exc:
+        return f"[OKX funding-rate-now] Error: {exc}"
+    if not data:
+        return "[OKX funding-rate-now] No data."
+
+    d = data[0]
+    funding_rate = d.get("fundingRate", "N/A")
+    next_funding = d.get("nextFundingRate", "N/A")
+    funding_time = d.get("fundingTime", "")
+    next_funding_time = d.get("nextFundingTime", "")
+    method = d.get("method", "")
+
+    try:
+        ft_dt = datetime.fromtimestamp(int(funding_time) / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    except Exception:
+        ft_dt = funding_time
+    try:
+        nft_dt = datetime.fromtimestamp(int(next_funding_time) / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    except Exception:
+        nft_dt = next_funding_time
+
+    return (
+        f"OKX Current Funding Rate ({swap_id}):\n"
+        f"  Current Rate: {funding_rate} (settles {ft_dt})\n"
+        f"  Next Rate:    {next_funding} (settles {nft_dt})\n"
+        f"  Method: {method}"
+    )
+
+
+@okx_request_limiter(delay_ms=200)
+def get_okx_open_interest_now(inst_type: str, inst_id: str) -> str:
+    """Fetch real-time open interest snapshot from OKX /public/open-interest.
+
+    Args:
+        inst_type: "SWAP" for perpetuals, "FUTURES" for dated futures
+        inst_id: e.g. "BTC-USDT-SWAP"
+
+    Complements get_okx_open_interest_history (historical) with live snapshot.
+    """
+    symbol = _resolve_okx_symbol(inst_id)
+    swap_id = _to_inst_id(symbol)
+    try:
+        data = _okx_request("/api/v5/public/open-interest", {"instType": inst_type, "instId": swap_id})
+    except Exception as exc:
+        return f"[OKX open-interest-now] Error: {exc}"
+    if not data:
+        return "[OKX open-interest-now] No data."
+
+    d = data[0]
+    oi = d.get("oi", "N/A")
+    oi_ccy = d.get("oiCcy", "N/A")
+    ts = d.get("ts", "")
+    try:
+        dt = datetime.fromtimestamp(int(ts) / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    except Exception:
+        dt = ts
+
+    return (
+        f"OKX Real-time Open Interest ({swap_id}):\n"
+        f"  OI (contracts): {oi}\n"
+        f"  OI (coin):      {oi_ccy}\n"
+        f"  Timestamp:      {dt}"
+    )
+
+
+@okx_request_limiter(delay_ms=200)
+def get_okx_liquidation_orders(inst_type: str, ccy: str) -> str:
+    """Fetch and aggregate recent liquidation orders from OKX /public/liquidation-orders.
+
+    Args:
+        inst_type: "SWAP" for perpetuals
+        ccy: Base currency, e.g. "BTC"
+
+    Returns:
+        Aggregated liquidation summary by side (long/short) and 24h bucket.
+        Shows total liquidated USD notional + largest single liquidation.
+    """
+    try:
+        data = _okx_request("/api/v5/public/liquidation-orders", {
+            "instType": inst_type,
+            "ccy": ccy.upper(),
+            "state": "filled",
+        })
+    except Exception as exc:
+        return f"[OKX liquidations] Error: {exc}"
+    if not data:
+        return f"[OKX liquidations] No recent liquidation data for {ccy}."
+
+    # Aggregate by side
+    long_liq_usd = 0.0
+    short_liq_usd = 0.0
+    largest = 0.0
+    count = 0
+
+    for item in data:
+        details = item.get("details", [])
+        for d in details:
+            side = d.get("side", "")  # "buy" = short liq; "sell" = long liq
+            sz = float(d.get("sz", 0) or 0)
+            bk_px = float(d.get("bkPx", 0) or 0)
+            notional = sz * bk_px
+            if side == "sell":  # long liquidated
+                long_liq_usd += notional
+            elif side == "buy":  # short liquidated
+                short_liq_usd += notional
+            if notional > largest:
+                largest = notional
+            count += 1
+
+    return (
+        f"OKX Liquidation Orders ({ccy} {inst_type}, recent filled):\n"
+        f"  Long liquidations:  ${long_liq_usd:,.0f} USD\n"
+        f"  Short liquidations: ${short_liq_usd:,.0f} USD\n"
+        f"  Largest single liq: ${largest:,.0f} USD\n"
+        f"  Total events: {count}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# PR-3 News Extensions
+# ---------------------------------------------------------------------------
+
+@okx_request_limiter(delay_ms=200)
+def get_okx_announcements(ccy: str, curr_date: str, look_back_days: int = 14) -> str:
+    """Fetch OKX exchange announcements filtered for a currency.
+
+    No annType filter — fetches all and client-side filters by currency keyword.
+    Returns listings, delistings, suspensions, and rule changes.
+    """
+    try:
+        data = _okx_request("/api/v5/support/announcements", {"limit": "50"})
+    except Exception as exc:
+        return f"[OKX announcements] Error: {exc}"
+    if not data:
+        return "[OKX announcements] No announcements found."
+
+    ccy_upper = ccy.upper()
+    relevant = []
+    for item in data:
+        title = item.get("title", "")
+        ann_date = item.get("pTime", "")
+        try:
+            ann_ts = int(ann_date) / 1000
+            ann_dt = datetime.fromtimestamp(ann_ts, tz=timezone.utc).strftime("%Y-%m-%d")
+        except Exception:
+            ann_dt = ann_date
+        if ccy_upper in title.upper() or not ccy:
+            relevant.append(f"  [{ann_dt}] {title}")
+        if len(relevant) >= 10:
+            break
+
+    if not relevant:
+        return f"[OKX announcements] No announcements matching {ccy_upper} in recent {look_back_days}d."
+
+    return f"OKX Exchange Announcements ({ccy_upper}, recent):\n" + "\n".join(relevant)
+
+
+@okx_request_limiter(delay_ms=200)
+def get_okx_delivery_exercise(inst_type: str, ccy: str) -> str:
+    """Fetch recent delivery/exercise history from OKX /public/delivery-exercise-history.
+
+    Only reads the event metadata (delivery dates, settlement prices), not option greeks.
+    Used to identify upcoming contract expiries as price catalysts.
+    """
+    try:
+        data = _okx_request("/api/v5/public/delivery-exercise-history", {
+            "instType": inst_type,
+            "uly": f"{ccy.upper()}-USD",
+        })
+    except Exception as exc:
+        return f"[OKX delivery-exercise] Error: {exc}"
+    if not data:
+        return f"[OKX delivery-exercise] No recent delivery events for {ccy}."
+
+    lines = [f"OKX Delivery/Exercise History ({ccy} {inst_type}):"]
+    for item in data[:10]:
+        details = item.get("details", [])
+        for d in details[:3]:
+            inst_id = d.get("instId", "")
+            px = d.get("px", "")
+            ts = item.get("ts", "")
+            try:
+                dt = datetime.fromtimestamp(int(ts) / 1000, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+            except Exception:
+                dt = ts
+            lines.append(f"  [{dt}] {inst_id} settled at {px}")
+
+    return "\n".join(lines[:15])
+
+
+@okx_request_limiter(delay_ms=200)
+def get_okx_economic_calendar(curr_date: str, look_back_days: int = 7) -> str:
+    """Fetch crypto-related economic calendar events from OKX.
+
+    Returns upcoming or recent macro events relevant to crypto markets.
+    """
+    try:
+        data = _okx_request("/api/v5/public/economic-calendar", {"limit": "20"})
+    except Exception as exc:
+        return f"[OKX economic-calendar] Error: {exc}"
+    if not data:
+        return "[OKX economic-calendar] No calendar events found."
+
+    lines = [f"OKX Economic Calendar (recent {look_back_days}d + upcoming):"]
+    for item in data[:15]:
+        event = item.get("event", "")
+        region = item.get("region", "")
+        importance = item.get("importance", "")
+        date_str = item.get("date", "")
+        forecast = item.get("forecast", "")
+        prev = item.get("previous", "")
+        actual = item.get("actual", "")
+        lines.append(
+            f"  [{date_str}] [{importance}] {region}: {event} "
+            f"(forecast={forecast}, prev={prev}, actual={actual})"
+        )
+
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# PR-5 Sentiment Extensions
+# ---------------------------------------------------------------------------
+
+@okx_request_limiter(delay_ms=400)
+def get_okx_smart_money(inst_id: str) -> str:
+    """Aggregate OKX copy-trading lead trader data as smart money signal.
+
+    Calls /copytrading/public-lead-traders to get top traders,
+    then /public-current-subpositions for position direction snapshot.
+    Returns top 5 lead traders with direction, copy count, and weekly PnL.
+    """
+    symbol = _resolve_okx_symbol(inst_id)
+    ccy = _to_ccy(symbol)
+
+    # Fetch lead traders
+    try:
+        traders_data = _okx_request("/api/v5/copytrading/public-lead-traders", {
+            "instId": _to_inst_id(symbol),
+            "limit": "5",
+        })
+    except Exception as exc:
+        return f"[OKX smart-money] Lead traders error: {exc}"
+
+    if not traders_data:
+        return f"[OKX smart-money] No lead trader data for {symbol}."
+
+    lines = [f"OKX Smart Money — Lead Traders ({ccy}):"]
+    for trader in traders_data[:5]:
+        uid = trader.get("uniqueCode", "?")
+        nick = trader.get("nickName", uid)
+        pnl_7d = trader.get("weeklyPnl", "N/A")
+        copy_traders = trader.get("copyTradingNum", "N/A")
+        win_rate = trader.get("winRatio", "N/A")
+
+        # Try to get current subpositions for this trader
+        direction = "unknown"
+        try:
+            pos_data = _okx_request("/api/v5/copytrading/public-current-subpositions", {
+                "uniqueCode": uid,
+                "instId": _to_inst_id(symbol),
+                "limit": "1",
+            })
+            if pos_data:
+                pos = pos_data[0]
+                side = pos.get("posSide", pos.get("side", ""))
+                direction = "LONG" if side in ("long", "buy") else "SHORT" if side in ("short", "sell") else side
+        except Exception:
+            pass
+
+        lines.append(
+            f"  {nick}: direction={direction}, 7d_pnl={pnl_7d}, "
+            f"copy_traders={copy_traders}, win_rate={win_rate}"
+        )
+
+    return "\n".join(lines)
+
+
+@okx_request_limiter(delay_ms=400)
+def get_okx_margin_loan_ratio(ccy: str, period: str = "1D") -> str:
+    """Fetch OKX margin loan ratio — retail leverage usage indicator.
+
+    /rubik/stat/margin/loan-ratio measures the ratio of long margin loans
+    to short margin loans. High ratio = retail borrowing heavily for longs
+    (crowded long leverage). Low ratio = retail shorting with leverage.
+    """
+    try:
+        data = _okx_request("/api/v5/rubik/stat/margin/loan-ratio", {
+            "ccy": ccy.upper(),
+            "period": period,
+        })
+    except Exception as exc:
+        return f"[OKX margin-loan-ratio] Error: {exc}"
+    if not data:
+        return f"[OKX margin-loan-ratio] No data for {ccy}."
+
+    # data format varies; handle as list of [ts, ratio] or dict
+    lines = [f"OKX Margin Loan Ratio ({ccy}, {period}):"]
+    count = 0
+    for item in data[:14]:
+        if isinstance(item, list):
+            ts, ratio = item[0], item[1] if len(item) > 1 else "N/A"
+        elif isinstance(item, dict):
+            ts = item.get("ts", "")
+            ratio = item.get("ratio", item.get("loanRatio", "N/A"))
+        else:
+            continue
+        try:
+            dt = datetime.fromtimestamp(int(ts) / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
+        except Exception:
+            dt = ts
+        lines.append(f"  {dt}: loan_ratio={ratio}")
+        count += 1
+
+    if count == 0:
+        return f"[OKX margin-loan-ratio] Unexpected data format for {ccy}."
+
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# PR-4 Fundamentals Extensions
+# ---------------------------------------------------------------------------
+
+@okx_request_limiter(delay_ms=200)
+def get_okx_public_borrow(ccy: str) -> str:
+    """Fetch OKX savings public borrow info for a currency.
+
+    Returns borrow rates and available liquidity. High borrow rates =
+    scarcity of lendable supply (short demand or low supply available).
+    """
+    try:
+        data = _okx_request("/api/v5/finance/savings/public-borrow-info", {"ccy": ccy.upper()})
+    except Exception as exc:
+        return f"[OKX borrow] Error: {exc}"
+    if not data:
+        return f"[OKX borrow] No borrow data for {ccy}."
+
+    lines = [f"OKX Savings Borrow Info ({ccy.upper()}):"]
+    for item in data[:5]:
+        rate = item.get("rate", "N/A")
+        amt = item.get("amt", "N/A")
+        ccy_name = item.get("ccy", ccy)
+        lines.append(f"  {ccy_name}: rate={rate} (annualized), available={amt}")
+
+    return "\n".join(lines)

@@ -14,6 +14,11 @@ from tradingagents.agents.utils.crypto_market_tools import (
     get_crypto_elite_long_short_ratio,
     get_crypto_aggregated_oi_volume,
     get_crypto_put_call_ratio,
+    get_okx_ticker_snapshot,
+    get_okx_perp_basis,
+    get_okx_funding_rate_now,
+    get_okx_open_interest_now,
+    get_okx_liquidation_orders,
 )
 from tradingagents.agents.utils.cn_market_tools import (
     get_a_share_dragon_tiger,
@@ -45,6 +50,11 @@ def create_market_analyst(llm):
                 get_crypto_elite_long_short_ratio,
                 get_crypto_aggregated_oi_volume,
                 get_crypto_put_call_ratio,
+                get_okx_ticker_snapshot,
+                get_okx_perp_basis,
+                get_okx_funding_rate_now,
+                get_okx_open_interest_now,
+                get_okx_liquidation_orders,
             ]
         elif is_a_share:
             tools += [
@@ -112,11 +122,17 @@ def _build_system_message(asset_type: str) -> str:
 
 {_base_data_collection()}
 
-After OHLCV and indicators, call all seven crypto microstructure tools. Funding, open interest, long/short ratios, taker flow, elite positioning, aggregated OI/volume, and put/call ratio are not decoration; use them to decide whether the move is spot-led, leverage-led, crowded, or vulnerable to liquidation.
+After OHLCV and indicators, call all twelve crypto market tools:
 
-Think like a cross-market technician: align 1w/1d structure with 4h/1h timing, watch for momentum divergence, volatility expansion/compression, failed breakouts, and OI rising against price weakness. In crypto, a level matters more when it coincides with leverage imbalance or crowded positioning.
+Historical microstructure (use date range): funding rate history, open interest history, long/short ratio, taker volume, elite long/short ratio, aggregated OI/volume, put/call ratio.
 
-Write a sharp market report that names the primary trend, the quality of momentum, the key support/resistance levels, the volatility regime, and the derivatives signal. Close with a compact table by timeframe plus a final microstructure verdict. Your report ends there; do not add entry instructions, stop-loss placement, target prices, sizing, or buy/sell recommendations.{language}"""
+Live snapshots (no date range needed): call get_okx_ticker_snapshot for spot/swap price reference; get_okx_perp_basis for mark-price candles and contango/backwardation signal; get_okx_funding_rate_now for current and next-period funding rate; get_okx_open_interest_now for real-time OI snapshot; get_okx_liquidation_orders for recent forced deleveraging summary.
+
+None of these tools are decorative. Use them to decide whether the current move is spot-led or leverage-led, whether longs or shorts are being squeezed, whether OI is expanding into a trend or collapsing into a reversal, and whether liquidation cascades are a near-term risk.
+
+Think like a cross-market technician: align 1w/1d structure with 4h/1h timing, watch for momentum divergence, volatility expansion/compression, failed breakouts, and OI rising against price weakness. In crypto, a level matters more when it coincides with leverage imbalance, crowded positioning, or pending liquidation clusters.
+
+Write a sharp market report that names the primary trend, the quality of momentum, the key support/resistance levels, the volatility regime, and the derivatives + liquidation signal. Close with a compact table by timeframe plus a final microstructure verdict. Your report ends there; do not add entry instructions, stop-loss placement, target prices, sizing, or buy/sell recommendations.{language}"""
 
     if asset_type == "a_share":
         return f"""You are the A-share market-structure analyst on this trading team. Your report should explain the stock's technical state in the context of mainland China's market microstructure: price trend, sector relative strength, capital flow, northbound participation, leverage, limit-up/down behavior, and hot-money traces.

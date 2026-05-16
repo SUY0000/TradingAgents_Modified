@@ -151,3 +151,88 @@ def get_crypto_put_call_ratio(
     Returns CSV with columns: timestamp, oi_put_call_ratio, vol_put_call_ratio
     """
     return route_to_vendor("get_put_call_ratio", symbol, start_date, end_date, period=period)
+
+
+@tool
+def get_okx_ticker_snapshot(
+    symbol: Annotated[str, "Crypto trading pair, e.g. 'BTC/USDT' or 'BTC-USDT-SWAP'"],
+) -> str:
+    """Fetch live spot and swap 24h ticker snapshot from OKX.
+
+    Provides last price, 24h high/low, volume, and 24h change for both
+    spot and perpetual markets. Use to establish the current spot price
+    reference and compare with derivatives pricing.
+    """
+    from tradingagents.dataflows.okx_data import get_okx_ticker
+    return get_okx_ticker(symbol)
+
+
+@tool
+def get_okx_perp_basis(
+    symbol: Annotated[str, "Crypto perpetual swap, e.g. 'BTC-USDT-SWAP'"],
+    bar: Annotated[str, "Candle bar size: 1H, 4H, 1D (default 1H)"] = "1H",
+) -> str:
+    """Fetch mark-price candles from OKX to derive perpetual vs. spot basis.
+
+    The perpetual-to-spot basis reflects whether futures are in contango
+    (positive premium, bullish bias) or backwardation (discount, bearish bias).
+    A rising basis often precedes funding rate increases. A collapsing basis
+    signals forced deleveraging or spot selling pressure.
+    """
+    from tradingagents.dataflows.okx_data import get_okx_mark_price_candles
+    return get_okx_mark_price_candles(symbol, bar=bar)
+
+
+@tool
+def get_okx_funding_rate_now(
+    symbol: Annotated[str, "Crypto perpetual swap, e.g. 'BTC/USDT' or 'BTC-USDT-SWAP'"],
+) -> str:
+    """Fetch current and next-period funding rate from OKX.
+
+    Provides both the current funding rate (already accruing) and the predicted
+    next-period funding rate. Together with funding rate history, this gives the
+    full funding curve: historical trend + current + forward expectation.
+
+    - Current rate > 0: longs pay shorts (bullish bias, bulls willing to pay)
+    - Next rate < current: funding pressure easing (potential squeeze exhaustion)
+    - Next rate > current: funding escalating (crowded long building)
+    """
+    from tradingagents.dataflows.okx_data import get_okx_funding_rate_now as _get
+    return _get(symbol)
+
+
+@tool
+def get_okx_open_interest_now(
+    symbol: Annotated[str, "Crypto perpetual swap, e.g. 'BTC-USDT-SWAP'"],
+    inst_type: Annotated[str, "Contract type: SWAP (default) or FUTURES"] = "SWAP",
+) -> str:
+    """Fetch real-time open interest snapshot from OKX.
+
+    Provides the live OI in contracts and coin units. Use alongside OI history
+    to determine whether OI is expanding or contracting at the current price level.
+
+    - OI expanding at highs + positive funding = leveraged long buildup (reversal risk)
+    - OI contracting at lows = position cleanup (potential bottom)
+    """
+    from tradingagents.dataflows.okx_data import get_okx_open_interest_now as _get
+    return _get(inst_type, symbol)
+
+
+@tool
+def get_okx_liquidation_orders(
+    symbol: Annotated[str, "Crypto asset, e.g. 'BTC/USDT' or 'BTC'"],
+    inst_type: Annotated[str, "Contract type: SWAP (default) or FUTURES"] = "SWAP",
+) -> str:
+    """Fetch and aggregate recent liquidation orders from OKX.
+
+    Returns aggregated long-side vs. short-side liquidation USD notional
+    plus the largest single liquidation event. Already pre-aggregated —
+    no need to process raw order list.
+
+    - Dominant long liquidations: forced deleveraging from longs (bearish pressure)
+    - Dominant short liquidations: short squeeze in progress (bullish fuel)
+    - Large single event > $10M: potential cascade risk or capitulation signal
+    """
+    from tradingagents.dataflows.okx_data import get_okx_liquidation_orders as _get, _to_ccy
+    ccy = _to_ccy(symbol)
+    return _get(inst_type, ccy)
