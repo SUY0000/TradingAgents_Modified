@@ -66,7 +66,11 @@ def _fetch_protocol_metrics(slug: str) -> str:
         return f"[DefiLlama] Data unavailable for {slug}: {exc}"
 
     name = proto.get("name", slug)
-    tvl = proto.get("tvl", "N/A")
+    tvl_history = proto.get("tvl", [])
+    if isinstance(tvl_history, list) and tvl_history:
+        tvl = tvl_history[-1].get("totalLiquidityUSD", "N/A")
+    else:
+        tvl = "N/A"
     category = proto.get("category", "N/A")
     chains = proto.get("chains", [])[:5]
 
