@@ -706,7 +706,7 @@ def get_okx_aggregated_oi_volume(
         symbol: CCXT-format pair or base currency
         start_date: Start date YYYY-MM-DD
         end_date: End date YYYY-MM-DD (inclusive)
-        period: Granularity — 5m, 1H, 4H, 1D, 1W
+        period: Granularity — 5m, 1H, 1D (4H is NOT supported by this endpoint)
 
     Returns:
         CSV string or error message string.

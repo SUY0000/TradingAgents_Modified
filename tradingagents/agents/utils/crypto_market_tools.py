@@ -116,7 +116,7 @@ def get_crypto_aggregated_oi_volume(
     symbol: Annotated[str, "Crypto trading pair, e.g. 'BTC/USDT' or 'BTC'"],
     start_date: Annotated[str, "Start date in yyyy-mm-dd format"],
     end_date: Annotated[str, "End date in yyyy-mm-dd format"],
-    period: Annotated[str, "Granularity: 5m, 1H, 4H, 1D, 1W (default 4H)"] = "4H",
+    period: Annotated[str, "Granularity: 5m, 1H, 1D (default 1H; 4H is NOT supported)"] = "1H",
 ) -> str:
     """Fetch aggregated open interest and trading volume from OKX.
 
