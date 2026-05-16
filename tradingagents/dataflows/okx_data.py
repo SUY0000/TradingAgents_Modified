@@ -1146,30 +1146,17 @@ def get_okx_delivery_exercise(inst_type: str, ccy: str) -> str:
 def get_okx_economic_calendar(curr_date: str, look_back_days: int = 7) -> str:
     """Fetch crypto-related economic calendar events from OKX.
 
-    Returns upcoming or recent macro events relevant to crypto markets.
+    NOTE: /api/v5/public/economic-calendar requires OKX API key authentication
+    (returns 50103 without it). This function returns a placeholder so the
+    news analyst can note the data gap without raising an exception.
     """
-    try:
-        data = _okx_request("/api/v5/public/economic-calendar", {"limit": "20"})
-    except Exception as exc:
-        return f"[OKX economic-calendar] Error: {exc}"
-    if not data:
-        return "[OKX economic-calendar] No calendar events found."
-
-    lines = [f"OKX Economic Calendar (recent {look_back_days}d + upcoming):"]
-    for item in data[:15]:
-        event = item.get("event", "")
-        region = item.get("region", "")
-        importance = item.get("importance", "")
-        date_str = item.get("date", "")
-        forecast = item.get("forecast", "")
-        prev = item.get("previous", "")
-        actual = item.get("actual", "")
-        lines.append(
-            f"  [{date_str}] [{importance}] {region}: {event} "
-            f"(forecast={forecast}, prev={prev}, actual={actual})"
-        )
-
-    return "\n".join(lines)
+    return (
+        "[OKX economic-calendar] Endpoint requires OKX API authentication "
+        "(OK-ACCESS-KEY header). No OKX API key is configured. "
+        "For macro event context, rely on CryptoPanic news feed instead."
+    )
+    # Dead code kept for reference — restore if OKX auth is added:
+    # data = _okx_request("/api/v5/public/economic-calendar", {"limit": "20"})
 
 
 # ---------------------------------------------------------------------------
@@ -1280,21 +1267,12 @@ def get_okx_margin_loan_ratio(ccy: str, period: str = "1D") -> str:
 def get_okx_public_borrow(ccy: str) -> str:
     """Fetch OKX savings public borrow info for a currency.
 
-    Returns borrow rates and available liquidity. High borrow rates =
-    scarcity of lendable supply (short demand or low supply available).
+    NOTE: /api/v5/finance/savings/public-borrow-info returns 403 Forbidden
+    without authentication. This function returns a placeholder so the
+    fundamentals analyst can note the data gap without raising an exception.
     """
-    try:
-        data = _okx_request("/api/v5/finance/savings/public-borrow-info", {"ccy": ccy.upper()})
-    except Exception as exc:
-        return f"[OKX borrow] Error: {exc}"
-    if not data:
-        return f"[OKX borrow] No borrow data for {ccy}."
-
-    lines = [f"OKX Savings Borrow Info ({ccy.upper()}):"]
-    for item in data[:5]:
-        rate = item.get("rate", "N/A")
-        amt = item.get("amt", "N/A")
-        ccy_name = item.get("ccy", ccy)
-        lines.append(f"  {ccy_name}: rate={rate} (annualized), available={amt}")
-
-    return "\n".join(lines)
+    return (
+        f"[OKX borrow] Endpoint requires OKX API authentication "
+        f"(returns 403 without OK-ACCESS-KEY). No OKX API key is configured. "
+        f"Borrow rate data for {ccy.upper()} is unavailable."
+    )
