@@ -205,20 +205,9 @@ class TradingAgentsGraph:
                 get_a_share_sector_performance,
                 get_a_share_margin_balance,
             ]
-        social_tools = [get_news]
         fundamentals_tools = [get_fundamentals, get_balance_sheet, get_cashflow, get_income_statement]
 
         if is_a_share:
-            from tradingagents.agents.utils.cn_sentiment_tools import (
-                get_a_share_hot_rank_history,
-                get_a_share_research_reports,
-                get_a_share_institutional_research,
-            )
-            social_tools = [
-                get_a_share_hot_rank_history,
-                get_a_share_research_reports,
-                get_a_share_institutional_research,
-            ]
             from tradingagents.agents.utils.fundamental_data_tools import (
                 get_earnings_forecast,
                 get_shareholder_count,
@@ -228,7 +217,6 @@ class TradingAgentsGraph:
 
         return {
             "market": ToolNode(market_tools),
-            "social": ToolNode(social_tools),
             "news": ToolNode(
                 [
                     get_news,
