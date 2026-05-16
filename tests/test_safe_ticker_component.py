@@ -14,8 +14,12 @@ class TestSafeTickerComponent(unittest.TestCase):
         for ticker in ("AAPL", "BRK-B", "BRK.A", "0700.HK", "7203.T", "BHP.AX", "^GSPC"):
             self.assertEqual(safe_ticker_component(ticker), ticker)
 
+    def test_normalizes_crypto_pairs(self):
+        self.assertEqual(safe_ticker_component("ETH/USDT"), "ETH_USDT")
+        self.assertEqual(safe_ticker_component("ETH/USDT:USDT"), "ETH_USDT_USDT")
+
     def test_rejects_path_separators(self):
-        for bad in (".", "..", "../etc", "a/b", "a\\b", "/abs", "..\\..\\x"):
+        for bad in (".", "..", "../etc", "a\\b", "/abs", "..\\..\\x", "ETH//USDT"):
             with self.assertRaises(ValueError):
                 safe_ticker_component(bad)
 
