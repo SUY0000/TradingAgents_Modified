@@ -43,6 +43,14 @@ from .akshare_data import (
     get_akshare_limit_status,
     get_akshare_sector_performance,
     get_akshare_margin_balance,
+    # cn_sentiment_data — social analyst tools
+    get_akshare_hot_rank_history,
+    get_akshare_research_reports,
+    get_akshare_institutional_research,
+    # fundamental_data extensions
+    get_akshare_earnings_forecast,
+    get_akshare_shareholder_count,
+    get_akshare_valuation_comparison,
 )
 from .okx_data import (
     get_okx_funding_rate,
@@ -77,7 +85,10 @@ TOOLS_CATEGORIES = {
             "get_fundamentals",
             "get_balance_sheet",
             "get_cashflow",
-            "get_income_statement"
+            "get_income_statement",
+            "get_earnings_forecast",
+            "get_shareholder_count",
+            "get_valuation_comparison",
         ]
     },
     "news_data": {
@@ -109,6 +120,14 @@ TOOLS_CATEGORIES = {
             "get_limit_status",
             "get_sector_performance",
             "get_margin_balance",
+        ]
+    },
+    "cn_sentiment_data": {
+        "description": "A-share sentiment / social layer data (akshare only): retail attention rank, sell-side research reports, institutional on-site research visits",
+        "tools": [
+            "get_hot_rank_history",
+            "get_research_reports",
+            "get_institutional_research",
         ]
     },
 }
@@ -173,6 +192,16 @@ VENDOR_METHODS = {
         "yfinance": get_yfinance_insider_transactions,
         "akshare": get_akshare_insider_transactions,
     },
+    # fundamental_data extensions — akshare only
+    "get_earnings_forecast": {
+        "akshare": get_akshare_earnings_forecast,
+    },
+    "get_shareholder_count": {
+        "akshare": get_akshare_shareholder_count,
+    },
+    "get_valuation_comparison": {
+        "akshare": get_akshare_valuation_comparison,
+    },
     # cn_market_data — akshare only
     "get_dragon_tiger": {
         "akshare": get_akshare_dragon_tiger,
@@ -191,6 +220,16 @@ VENDOR_METHODS = {
     },
     "get_margin_balance": {
         "akshare": get_akshare_margin_balance,
+    },
+    # cn_sentiment_data — akshare only
+    "get_hot_rank_history": {
+        "akshare": get_akshare_hot_rank_history,
+    },
+    "get_research_reports": {
+        "akshare": get_akshare_research_reports,
+    },
+    "get_institutional_research": {
+        "akshare": get_akshare_institutional_research,
     },
     # crypto_market_data — OKX only
     "get_funding_rate": {

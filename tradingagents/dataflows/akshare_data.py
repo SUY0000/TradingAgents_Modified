@@ -7,7 +7,6 @@ Config fields: none specific (uses data_cache_dir from global config).
 """
 
 import os
-import time
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from typing import Annotated, Literal
@@ -18,6 +17,7 @@ from stockstats import wrap
 from .config import get_config
 from .stockstats_utils import _clean_dataframe
 from .ccxt_data import best_ind_params
+from .akshare_common import akshare_retry, AkshareNetworkError
 
 
 # ---------------------------------------------------------------------------
@@ -60,11 +60,6 @@ def _get_exchange(symbol: str) -> str:
     return "SH"
 
 
-def _throttle() -> None:
-    """Sleep 0.5 s before each akshare call to avoid IP-level soft throttling."""
-    time.sleep(0.5)
-
-
 def _ak_date(date_str: str) -> str:
     """Convert YYYY-MM-DD → YYYYMMDD (no dashes) as required by some akshare APIs."""
     return date_str.replace("-", "")
@@ -102,14 +97,13 @@ def _load_akshare_ohlcv(symbol: str, curr_date: str) -> pd.DataFrame:
     if os.path.exists(cache_file):
         data = pd.read_csv(cache_file, on_bad_lines="skip", encoding="utf-8")
     else:
-        _throttle()
-        raw = ak.stock_zh_a_hist(
+        raw = akshare_retry(lambda: ak.stock_zh_a_hist(
             symbol=code,
             period="daily",
             start_date=_ak_date(start_str),
             end_date=_ak_date(end_str),
             adjust="qfq",
-        )
+        ))
         col_map = {
             "日期": "Date", "开盘": "Open", "最高": "High",
             "最低": "Low", "收盘": "Close", "成交量": "Volume",
@@ -225,8 +219,7 @@ def get_akshare_fundamentals(
     result = f"## A-Share Fundamentals for {symbol} (as of {curr_date})\n\n"
 
     try:
-        _throttle()
-        info_df = ak.stock_individual_info_em(symbol=code)
+        info_df = akshare_retry(lambda: ak.stock_individual_info_em(symbol=code))
         if not info_df.empty:
             result += "### Company Information\n"
             for _, row in info_df.iterrows():
@@ -236,8 +229,7 @@ def get_akshare_fundamentals(
         result += f"Company info unavailable: {e}\n\n"
 
     try:
-        _throttle()
-        val_df = ak.stock_a_indicator_lg(symbol=code)
+        val_df = akshare_retry(lambda: ak.stock_a_indicator_lg(symbol=code))
         if not val_df.empty:
             curr_dt = pd.to_datetime(curr_date)
             if "trade_date" in val_df.columns:
@@ -256,8 +248,7 @@ def _financial_stmt(symbol: str, fetch_fn, label: str) -> str:
     # akshare financial statement APIs require exchange_prefix format: SH600519 / SZ000001
     ex_code = _resolve_a_share_symbol(symbol, "exchange_prefix")
     try:
-        _throttle()
-        df = fetch_fn(symbol=ex_code)
+        df = akshare_retry(lambda: fetch_fn(symbol=ex_code))
         if df is None or df.empty:
             return f"No {label} data for {symbol}"
         # Wide format: rows = report periods, keep key metric columns (first 20)
@@ -311,8 +302,7 @@ def get_akshare_news(
 
     code = _resolve_a_share_symbol(ticker, "6digit")
     try:
-        _throttle()
-        df = ak.stock_news_em(symbol=code)
+        df = akshare_retry(lambda: ak.stock_news_em(symbol=code))
         if df.empty:
             return f"No news found for {ticker}"
 
@@ -350,29 +340,86 @@ def get_akshare_global_news(
     curr_date: Annotated[str, "Current date, YYYY-mm-dd"],
     look_back_days: Annotated[int, "Days to look back"] = 7,
     limit: Annotated[int, "Max articles to return"] = 20,
+    ticker: str | None = None,
     **kwargs,
 ) -> str:
-    """Fetch A-share macro/economic news via akshare (百度财经)."""
+    """Fetch sector-filtered policy/macro news via CCTV daily transcripts.
+
+    If ticker is provided, the stock's Shenwan industry sector keywords are
+    used to filter CCTV news items. Otherwise the top 3 headlines per day
+    are returned. Falls back to a 14-day window if zero matches in the
+    initial look_back_days window.
+    """
     import akshare as ak
 
-    try:
-        _throttle()
-        df = ak.news_economic_baidu()
-        if df.empty:
-            return f"No global news found for {curr_date}"
+    look_back_days = min(max(look_back_days, 1), 14)
+    end_dt = datetime.strptime(curr_date, "%Y-%m-%d")
+    start_dt = end_dt - timedelta(days=look_back_days)
 
-        news_str = ""
-        for _, row in df.head(limit).iterrows():
-            title = str(row.iloc[0]) if len(row) > 0 else "No title"
-            summary = str(row.iloc[1])[:300] if len(row) > 1 else ""
-            news_str += f"### {title}\n"
-            if summary and summary != "nan":
-                news_str += f"{summary}...\n"
-            news_str += "\n"
+    # Resolve sector keywords from ticker
+    keywords: list[str] = []
+    if ticker:
+        try:
+            code = _resolve_a_share_symbol(ticker, "6digit")
+            info_df = akshare_retry(lambda: ak.stock_individual_info_em(symbol=code))
+            for _, row in info_df.iterrows():
+                if "行业" in str(row.iloc[0]):
+                    sector = str(row.iloc[1])
+                    keywords.append(sector)
+                    if len(sector) > 2:
+                        keywords.append(sector[:2])
+                    break
+        except Exception:
+            pass
 
-        return f"## Global Market News (A-share context), as of {curr_date}:\n\n{news_str}"
-    except Exception as e:
-        return f"Error fetching global news: {str(e)}"
+    rows: list[pd.DataFrame] = []
+    cur = end_dt
+    while cur >= start_dt:
+        ymd = cur.strftime("%Y%m%d")
+        try:
+            df = akshare_retry(lambda: ak.news_cctv(date=ymd), pre_delay=0.2)
+            if df is not None and not df.empty:
+                title_col = next(
+                    (c for c in df.columns if "title" in c.lower() or "标题" in c),
+                    df.columns[1] if len(df.columns) > 1 else df.columns[0],
+                )
+                content_col = next(
+                    (c for c in df.columns if "content" in c.lower() or "内容" in c),
+                    None,
+                )
+                if keywords:
+                    mask = df[title_col].astype(str).apply(
+                        lambda s: any(kw in s for kw in keywords)
+                    )
+                    if content_col:
+                        mask |= df[content_col].astype(str).apply(
+                            lambda s: any(kw in s for kw in keywords)
+                        )
+                    df = df[mask].head(5)
+                else:
+                    df = df.head(3)
+                if not df.empty:
+                    rows.append(df)
+        except Exception:
+            pass
+        cur -= timedelta(days=1)
+
+    if not rows:
+        if keywords and look_back_days < 14:
+            return get_akshare_global_news(curr_date, 14, limit, ticker=ticker)
+        label = ticker or "A-share market"
+        return (
+            f"No policy/macro news matched for {label} between "
+            f"{start_dt.date()} and {end_dt.date()}"
+        )
+
+    combined = pd.concat(rows, ignore_index=True).head(limit)
+    header = (
+        f"## Policy / Macro News (CCTV, {start_dt.date()} → {end_dt.date()})"
+    )
+    if keywords:
+        header += f"\nFiltered by sector keywords: {keywords}"
+    return header + "\n\n" + combined.to_string(index=False)
 
 
 def get_akshare_insider_transactions(
@@ -388,12 +435,11 @@ def get_akshare_insider_transactions(
     curr_dt = datetime.strptime(curr_date, "%Y-%m-%d")
     start_dt = curr_dt - relativedelta(years=1)
     try:
-        _throttle()
-        df = ak.stock_share_change_cninfo(
+        df = akshare_retry(lambda: ak.stock_share_change_cninfo(
             symbol=code,
             start_date=_ak_date(start_dt.strftime("%Y-%m-%d")),
             end_date=_ak_date(curr_date),
-        )
+        ))
         if df is None or df.empty:
             return f"No major shareholder stake change data for {symbol} in the past year"
         return (
@@ -423,9 +469,7 @@ def get_akshare_dragon_tiger(
 
     code = _resolve_a_share_symbol(symbol, "6digit")
     try:
-        _throttle()
-        # Returns dates when the stock appeared on the Dragon-Tiger List
-        df = ak.stock_lhb_stock_detail_date_em(symbol=code)
+        df = akshare_retry(lambda: ak.stock_lhb_stock_detail_date_em(symbol=code))
         if df is None or df.empty:
             return f"No Dragon-Tiger List appearances on record for {symbol}"
 
@@ -464,8 +508,7 @@ def get_akshare_northbound_holding(
 
     code = _resolve_a_share_symbol(symbol, "6digit")
     try:
-        _throttle()
-        df = ak.stock_hsgt_individual_em(symbol=code)
+        df = akshare_retry(lambda: ak.stock_hsgt_individual_em(symbol=code))
         if df.empty:
             return f"No northbound holding data for {symbol}"
 
@@ -506,8 +549,7 @@ def get_akshare_main_capital_flow(
     market = {"SH": "sh", "SZ": "sz", "BJ": "bj"}.get(exchange, "sh")
 
     try:
-        _throttle()
-        df = ak.stock_individual_fund_flow(stock=code, market=market)
+        df = akshare_retry(lambda: ak.stock_individual_fund_flow(stock=code, market=market))
         if df.empty:
             return f"No capital flow data for {symbol}"
 
@@ -595,8 +637,7 @@ def get_akshare_sector_performance(
 
     code = _resolve_a_share_symbol(symbol, "6digit")
     try:
-        _throttle()
-        info_df = ak.stock_individual_info_em(symbol=code)
+        info_df = akshare_retry(lambda: ak.stock_individual_info_em(symbol=code))
         sector_name = None
         if not info_df.empty:
             for _, row in info_df.iterrows():
@@ -608,14 +649,13 @@ def get_akshare_sector_performance(
         if not sector_name:
             return f"Could not determine Shenwan industry sector for {symbol}"
 
-        _throttle()
-        df = ak.stock_board_industry_hist_em(
+        df = akshare_retry(lambda: ak.stock_board_industry_hist_em(
             symbol=sector_name,
             start_date=_ak_date(start_date),
             end_date=_ak_date(end_date),
             period="日k",
             adjust="",
-        )
+        ))
 
         if df.empty:
             return f"No sector data for '{sector_name}' (industry of {symbol})"
@@ -656,11 +696,10 @@ def get_akshare_margin_balance(
         # SSE and SZSE margin APIs require YYYYMMDD format (no dashes)
         date_str = current_dt.strftime("%Y%m%d")
         try:
-            _throttle()
             if exchange == "SZ":
-                df = ak.stock_margin_detail_szse(date=date_str)
+                df = akshare_retry(lambda: ak.stock_margin_detail_szse(date=date_str))
             else:
-                df = ak.stock_margin_detail_sse(date=date_str)
+                df = akshare_retry(lambda: ak.stock_margin_detail_sse(date=date_str))
 
             if not df.empty:
                 code_col = next(
@@ -683,3 +722,283 @@ def get_akshare_margin_balance(
         f"(Weekly sampling; units: CNY)\n\n"
         f"{result_df.to_string(index=False)}\n"
     )
+
+
+# ---------------------------------------------------------------------------
+# A-share sentiment / social analyst tools (cn_sentiment_data category)
+# ---------------------------------------------------------------------------
+
+def get_akshare_hot_rank_history(
+    symbol: Annotated[str, "A-share ticker, e.g. 600519.SH"],
+    curr_date: Annotated[str, "Current date, YYYY-mm-dd"],
+    look_back_days: Annotated[int, "Days to look back"] = 30,
+    **kwargs,
+) -> str:
+    """Fetch East Money retail-investor attention rank history (人气排名) for an A-share.
+
+    Returns a daily time-series of this stock's popularity ranking among all
+    A-share tickers on East Money (东方财富). A lower rank number means higher
+    attention. Tracks new fans (新晋粉丝 ratio) vs loyal fans (铁杆粉丝 ratio).
+    """
+    import akshare as ak
+
+    ex_code = _resolve_a_share_symbol(symbol, "exchange_prefix")
+    try:
+        df = akshare_retry(lambda: ak.stock_hot_rank_detail_em(symbol=ex_code))
+        if df is None or df.empty:
+            return f"No hot-rank history data for {symbol}"
+
+        date_col = next((c for c in df.columns if "时间" in c or "日期" in c), None)
+        if date_col:
+            df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+            end_dt = pd.to_datetime(curr_date)
+            start_dt = end_dt - timedelta(days=look_back_days)
+            df = df[(df[date_col] >= start_dt) & (df[date_col] <= end_dt)]
+
+        if df.empty:
+            return f"No hot-rank data for {symbol} in the last {look_back_days} days"
+
+        return (
+            f"## Retail Attention Rank History for {symbol} "
+            f"(last {look_back_days} days up to {curr_date})\n"
+            f"(排名: lower = more popular; 新晋粉丝/铁杆粉丝 are share ratios)\n\n"
+            f"{df.to_string(index=False)}\n"
+        )
+    except AkshareNetworkError as e:
+        return f"Error fetching hot-rank history for {symbol}: {e}"
+    except Exception as e:
+        return f"Error fetching hot-rank history for {symbol}: {e}"
+
+
+def get_akshare_research_reports(
+    symbol: Annotated[str, "A-share ticker, e.g. 600519.SH"],
+    curr_date: Annotated[str, "Current date, YYYY-mm-dd"],
+    look_back_days: Annotated[int, "Days to look back"] = 90,
+    **kwargs,
+) -> str:
+    """Fetch sell-side analyst research reports for an A-share (券商研报).
+
+    Returns report titles, issuing institution, East Money rating, earnings
+    forecasts (EPS/PE for upcoming years), and publication date. Use to gauge
+    sell-side consensus and identify recent rating changes or target-price revisions.
+    """
+    import akshare as ak
+
+    code = _resolve_a_share_symbol(symbol, "6digit")
+    try:
+        df = akshare_retry(lambda: ak.stock_research_report_em(symbol=code))
+        if df is None or df.empty:
+            return f"No research reports found for {symbol}"
+
+        date_col = next((c for c in df.columns if "日期" in c or "date" in c.lower()), None)
+        if date_col:
+            df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+            end_dt = pd.to_datetime(curr_date)
+            start_dt = end_dt - timedelta(days=look_back_days)
+            df = df[(df[date_col] >= start_dt) & (df[date_col] <= end_dt)]
+
+        if df.empty:
+            return f"No research reports for {symbol} in the last {look_back_days} days"
+
+        # Drop PDF link column to keep output compact
+        drop_cols = [c for c in df.columns if "链接" in c or "url" in c.lower() or "pdf" in c.lower()]
+        df = df.drop(columns=drop_cols, errors="ignore").head(30)
+
+        return (
+            f"## Sell-Side Research Reports for {symbol} "
+            f"(last {look_back_days} days up to {curr_date})\n\n"
+            f"{df.to_string(index=False)}\n"
+        )
+    except AkshareNetworkError as e:
+        return f"Error fetching research reports for {symbol}: {e}"
+    except Exception as e:
+        return f"Error fetching research reports for {symbol}: {e}"
+
+
+def get_akshare_institutional_research(
+    symbol: Annotated[str, "A-share ticker, e.g. 600519.SH"],
+    curr_date: Annotated[str, "Current date, YYYY-mm-dd"],
+    look_back_days: Annotated[int, "Days to look back"] = 180,
+    **kwargs,
+) -> str:
+    """Fetch buy-side / institutional on-site research activities for an A-share (机构调研).
+
+    Shows which institutions (funds, brokerages) visited the company, the
+    reception date, number of visiting institutions, reception format, and
+    key attendees. Heavy recent institutional interest is a positive signal.
+    """
+    import akshare as ak
+
+    code = _resolve_a_share_symbol(symbol, "6digit")
+    end_dt = datetime.strptime(curr_date, "%Y-%m-%d")
+    start_dt = end_dt - timedelta(days=look_back_days)
+    start_str = start_dt.strftime("%Y%m%d")
+
+    try:
+        df = akshare_retry(lambda: ak.stock_jgdy_tj_em(date=start_str))
+        if df is None or df.empty:
+            return f"No institutional research data available starting {start_str}"
+
+        # Filter by ticker code
+        code_col = next((c for c in df.columns if "代码" in c), None)
+        if code_col:
+            df = df[df[code_col].astype(str) == code]
+
+        if df.empty:
+            return f"No institutional research visits found for {symbol} in the last {look_back_days} days"
+
+        # Filter by reception date <= curr_date
+        date_col = next((c for c in df.columns if "接待日期" in c or "日期" in c), None)
+        if date_col:
+            df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+            df = df[df[date_col] <= pd.to_datetime(curr_date)]
+
+        if df.empty:
+            return f"No institutional research visits for {symbol} up to {curr_date}"
+
+        # Drop price columns (不相关于调研活动本身)
+        drop_cols = [c for c in df.columns if "最新价" in c or "涨跌" in c or "序号" in c]
+        df = df.drop(columns=drop_cols, errors="ignore").head(20)
+
+        return (
+            f"## Institutional Research Visits for {symbol} "
+            f"(last {look_back_days} days up to {curr_date})\n\n"
+            f"{df.to_string(index=False)}\n"
+        )
+    except AkshareNetworkError as e:
+        return f"Error fetching institutional research for {symbol}: {e}"
+    except Exception as e:
+        return f"Error fetching institutional research for {symbol}: {e}"
+
+
+# ---------------------------------------------------------------------------
+# A-share additional fundamentals tools (fundamental_data category extension)
+# ---------------------------------------------------------------------------
+
+def get_akshare_earnings_forecast(
+    symbol: Annotated[str, "A-share ticker, e.g. 600519.SH"],
+    curr_date: Annotated[str, "Current date, YYYY-mm-dd"],
+    **kwargs,
+) -> str:
+    """Fetch earnings forecast / performance pre-announcement (业绩预告) for an A-share.
+
+    Scans the 4 most recent standard quarterly report dates before curr_date
+    (Q1=0331, Q2=0630, Q3=0930, Q4=1231) and returns any pre-announcement
+    records filed for this ticker. Covers net profit / revenue expectations,
+    YoY change, and management explanation.
+    """
+    import akshare as ak
+
+    code = _resolve_a_share_symbol(symbol, "6digit")
+    end_dt = datetime.strptime(curr_date, "%Y-%m-%d")
+
+    # Build list of up to 8 quarterly report dates before curr_date
+    report_months = [(3, 31), (6, 30), (9, 30), (12, 31)]
+    candidates: list[str] = []
+    for year_offset in range(2):
+        yr = end_dt.year - year_offset
+        for month, day in reversed(report_months):
+            try:
+                candidate = datetime(yr, month, day)
+                if candidate < end_dt:
+                    candidates.append(candidate.strftime("%Y%m%d"))
+            except ValueError:
+                pass
+    candidates = candidates[:8]
+
+    found_rows: list[pd.DataFrame] = []
+    for rpt_date in candidates:
+        try:
+            df = akshare_retry(lambda: ak.stock_yjyg_em(date=rpt_date), pre_delay=0.3)
+            if df is None or df.empty:
+                continue
+            code_col = next((c for c in df.columns if "股票代码" in c or "代码" in c), None)
+            if code_col:
+                matched = df[df[code_col].astype(str) == code]
+                if not matched.empty:
+                    found_rows.append(matched)
+                    if len(found_rows) >= 2:
+                        break
+        except Exception:
+            continue
+
+    if not found_rows:
+        return f"No recent earnings forecast on file for {symbol} (checked {len(candidates)} report periods)"
+
+    combined = pd.concat(found_rows, ignore_index=True)
+    return (
+        f"## Earnings Forecast / Performance Pre-announcement for {symbol} "
+        f"(as of {curr_date})\n\n"
+        f"{combined.to_string(index=False)}\n"
+    )
+
+
+def get_akshare_shareholder_count(
+    symbol: Annotated[str, "A-share ticker, e.g. 600519.SH"],
+    curr_date: Annotated[str, "Current date, YYYY-mm-dd"],
+    **kwargs,
+) -> str:
+    """Fetch shareholder count history (股东户数) for an A-share.
+
+    Declining shareholder count with rising price indicates institutional
+    concentration (positive); rising shareholder count may indicate retail
+    distribution. Includes per-share market value, total market cap, and
+    quarter-over-quarter change ratios.
+    """
+    import akshare as ak
+
+    code = _resolve_a_share_symbol(symbol, "6digit")
+    try:
+        df = akshare_retry(lambda: ak.stock_zh_a_gdhs_detail_em(symbol=code))
+        if df is None or df.empty:
+            return f"No shareholder count data for {symbol}"
+
+        # Filter to periods on or before curr_date
+        date_col = next((c for c in df.columns if "截止日" in c or "日期" in c), None)
+        if date_col:
+            df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
+            df = df[df[date_col] <= pd.to_datetime(curr_date)]
+
+        if df.empty:
+            return f"No shareholder count data for {symbol} on or before {curr_date}"
+
+        return (
+            f"## Shareholder Count History for {symbol} (as of {curr_date})\n"
+            f"(Declining 股东户数 + rising price → institutional concentration; "
+            f"rising 股东户数 → retail dispersion)\n\n"
+            f"{df.tail(20).to_string(index=False)}\n"
+        )
+    except AkshareNetworkError as e:
+        return f"Error fetching shareholder count for {symbol}: {e}"
+    except Exception as e:
+        return f"Error fetching shareholder count for {symbol}: {e}"
+
+
+def get_akshare_valuation_comparison(
+    symbol: Annotated[str, "A-share ticker, e.g. 600519.SH"],
+    curr_date: Annotated[str, "Current date, YYYY-mm-dd"],
+    **kwargs,
+) -> str:
+    """Fetch peer valuation comparison for an A-share within its Shenwan industry (同行估值对标).
+
+    Returns PE/PB/PS/PEG and EV/EBITDA metrics for the target company,
+    its industry median and average, and key sector peers — enabling
+    relative valuation assessment.
+    """
+    import akshare as ak
+
+    ex_code = _resolve_a_share_symbol(symbol, "exchange_prefix")
+    try:
+        df = akshare_retry(lambda: ak.stock_zh_valuation_comparison_em(symbol=ex_code))
+        if df is None or df.empty:
+            return f"Valuation comparison unavailable for {symbol}"
+
+        return (
+            f"## Peer Valuation Comparison for {symbol} (as of {curr_date})\n"
+            f"(Industry median / average + sector peers; PE/PB/PS/PEG/EV-EBITDA)\n\n"
+            f"{df.head(15).to_string(index=False)}\n"
+        )
+    except AkshareNetworkError as e:
+        return f"Error fetching valuation comparison for {symbol}: {e}"
+    except Exception as e:
+        return f"Error fetching valuation comparison for {symbol}: {e}"
