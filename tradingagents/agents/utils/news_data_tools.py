@@ -25,7 +25,7 @@ def get_global_news(
     curr_date: Annotated[str, "Current date in yyyy-mm-dd format"],
     look_back_days: Annotated[Optional[int], "Days to look back; omit to use the configured default"] = None,
     limit: Annotated[Optional[int], "Max articles to return; omit to use the configured default"] = None,
-    ticker: Annotated[str, "Ticker symbol of the stock being analyzed (used for sector-filtered policy news in A-share mode)"] = None,
+    ticker: Annotated[Optional[str], "Ticker symbol of the stock being analyzed (used for sector-filtered policy news in A-share mode)"] = None,
 ) -> str:
     """
     Retrieve global / macro news data.
