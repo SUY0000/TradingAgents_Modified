@@ -41,10 +41,22 @@ def get_defillama_protocol(slug: str) -> str:
     return result
 
 
+def _get(url: str, timeout: int = 25) -> requests.Response:
+    """GET with one retry on timeout."""
+    for attempt in range(2):
+        try:
+            return requests.get(url, timeout=timeout)
+        except requests.exceptions.Timeout:
+            if attempt == 0:
+                logger.debug("DefiLlama timeout on %s, retrying", url)
+                continue
+            raise
+
+
 def _fetch_protocol_metrics(slug: str) -> str:
     # Fetch protocol TVL
     try:
-        resp = requests.get(f"{_API_BASE}/protocol/{slug}", timeout=10)
+        resp = _get(f"{_API_BASE}/protocol/{slug}")
         if resp.status_code == 404:
             return f"[DefiLlama] Protocol '{slug}' not found — may not be tracked."
         resp.raise_for_status()
@@ -61,7 +73,7 @@ def _fetch_protocol_metrics(slug: str) -> str:
     # Fetch fees/revenue
     fees_info = ""
     try:
-        f_resp = requests.get(f"{_API_BASE}/summary/fees/{slug}", timeout=10)
+        f_resp = _get(f"{_API_BASE}/summary/fees/{slug}")
         if f_resp.status_code == 200:
             fdata = f_resp.json()
             fees_24h = fdata.get("total24h", "N/A")
