@@ -205,25 +205,42 @@ class TradingAgentsGraph:
                 get_a_share_sector_performance,
                 get_a_share_margin_balance,
             ]
-        fundamentals_tools = [get_fundamentals, get_balance_sheet, get_cashflow, get_income_statement]
-
-        if is_a_share:
-            from tradingagents.agents.utils.fundamental_data_tools import (
-                get_earnings_forecast,
-                get_shareholder_count,
-                get_valuation_comparison,
+        if is_crypto:
+            from tradingagents.agents.utils.crypto_fundamental_tools import (
+                get_token_profile,
+                get_protocol_metrics,
+                get_public_borrow,
             )
-            fundamentals_tools += [get_earnings_forecast, get_shareholder_count, get_valuation_comparison]
+            fundamentals_tools = [get_token_profile, get_protocol_metrics, get_public_borrow]
+        else:
+            fundamentals_tools = [get_fundamentals, get_balance_sheet, get_cashflow, get_income_statement]
+            if is_a_share:
+                from tradingagents.agents.utils.fundamental_data_tools import (
+                    get_earnings_forecast,
+                    get_shareholder_count,
+                    get_valuation_comparison,
+                )
+                fundamentals_tools += [get_earnings_forecast, get_shareholder_count, get_valuation_comparison]
+
+        if is_crypto:
+            from tradingagents.agents.utils.crypto_news_tools import (
+                get_crypto_news_cryptopanic,
+                get_okx_exchange_announcements,
+                get_okx_delivery_events,
+                get_okx_macro_calendar,
+            )
+            news_tools = [
+                get_crypto_news_cryptopanic,
+                get_okx_exchange_announcements,
+                get_okx_delivery_events,
+                get_okx_macro_calendar,
+            ]
+        else:
+            news_tools = [get_news, get_global_news, get_insider_transactions]
 
         return {
             "market": ToolNode(market_tools),
-            "news": ToolNode(
-                [
-                    get_news,
-                    get_global_news,
-                    get_insider_transactions,
-                ]
-            ),
+            "news": ToolNode(news_tools),
             "fundamentals": ToolNode(fundamentals_tools),
         }
 
