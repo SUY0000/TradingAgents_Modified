@@ -122,17 +122,20 @@ def _build_system_message(asset_type: str) -> str:
 
 {_base_data_collection()}
 
-After OHLCV and indicators, call all twelve crypto market tools:
+Work in two strict phases. Do not interleave them.
 
-Historical microstructure (use date range): funding rate history, open interest history, long/short ratio, taker volume, elite long/short ratio, aggregated OI/volume, put/call ratio.
+PHASE 1 — Time-domain. For each timeframe above, call get_stock_data first, then get_indicators once with comma-separated indicators. Use 1w/1d for trend and 4h/1h for timing. Do not call derivative tools until this phase is complete.
 
-Live snapshots (no date range needed): call get_okx_ticker_snapshot for spot/swap price reference; get_okx_perp_basis for mark-price candles and contango/backwardation signal; get_okx_funding_rate_now for current and next-period funding rate; get_okx_open_interest_now for real-time OI snapshot; get_okx_liquidation_orders for recent forced deleveraging summary.
+PHASE 2 — Cross-domain derivatives. Call each dimension once, not once per timeframe:
+- Spot snapshot: get_okx_ticker_snapshot.
+- Perpetual leverage: get_okx_funding_rate_now, get_crypto_funding_rate, get_okx_open_interest_now, get_crypto_open_interest, get_crypto_long_short_ratio, get_crypto_taker_volume, get_crypto_elite_long_short_ratio, get_crypto_aggregated_oi_volume, get_crypto_put_call_ratio.
+- Stress and basis: get_okx_liquidation_orders, get_okx_perp_basis.
 
-None of these tools are decorative. Use them to decide whether the current move is spot-led or leverage-led, whether longs or shorts are being squeezed, whether OI is expanding into a trend or collapsing into a reversal, and whether liquidation cascades are a near-term risk.
+Budget: stay within about 18 tool calls total. If a tool errors, note the data gap and do not retry. Use these tools to decide whether the current move is spot-led or leverage-led, whether longs or shorts are being squeezed, whether OI is expanding into a trend or collapsing into a reversal, and whether liquidation pressure or basis confirms the price action.
 
 Think like a cross-market technician: align 1w/1d structure with 4h/1h timing, watch for momentum divergence, volatility expansion/compression, failed breakouts, and OI rising against price weakness. In crypto, a level matters more when it coincides with leverage imbalance, crowded positioning, or pending liquidation clusters.
 
-Write a sharp market report that names the primary trend, the quality of momentum, the key support/resistance levels, the volatility regime, and the derivatives + liquidation signal. Close with a compact table by timeframe plus a final microstructure verdict. Your report ends there; do not add entry instructions, stop-loss placement, target prices, sizing, or buy/sell recommendations.{language}"""
+Write a sharp market report with two compact tables: first by timeframe covering trend, momentum, and volatility; second by derivatives layer covering spot, perp leverage, and stress/basis. Close with one synthesizing microstructure verdict. Your report ends there; do not add entry instructions, stop-loss placement, target prices, sizing, or buy/sell recommendations.{language}"""
 
     if asset_type == "a_share":
         return f"""You are the A-share market-structure analyst on this trading team. Your report should explain the stock's technical state in the context of mainland China's market microstructure: price trend, sector relative strength, capital flow, northbound participation, leverage, limit-up/down behavior, and hot-money traces.

@@ -1,280 +1,189 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+TradingAgents is a LangGraph-based multi-agent trading framework. Agents produce one of: BUY, OVERWEIGHT, HOLD, UNDERWEIGHT, SELL.
 
-## Project Overview
+## Fork / Worktree Rules
 
-TradingAgents is a multi-agent LLM financial trading framework built on LangGraph. It simulates a trading firm with specialized agents (analysts, researchers, traders, risk managers) that collaborate through structured debate to produce trading decisions. Decisions are one of: BUY, OVERWEIGHT, HOLD, UNDERWEIGHT, SELL.
+This fork uses two worktrees:
 
-## Fork 工作流与双 Worktree 开发规范
-
-本项目是从上游开源仓库 fork 而来，遵循"双 worktree 隔离"开发模式。任何代码改动都必须遵守下列规则。
-
-### 仓库布局
-
-```
-开发 worktree:  .../<ProjectName>/         ← git 操作 + 代码编辑
-构建 worktree:  .../<ProjectName>_Build/   ← 编译 + 打包 + 安装
-                                                          （detached HEAD，不参与提交）
+```text
+TradingAgents_Modified/        # development worktree: edit code, git commit/rebase/push
+TradingAgents_Modified_Build/  # build/install worktree: detached HEAD, no source edits
 ```
 
-两个目录共享同一个 `.git`，但工作区独立。命名约定：构建 worktree 与开发 worktree 同级，目录名加 `_Build` 后缀。
+Hard rules:
+- Run `git worktree list` before code changes; edit only in the development worktree.
+- Do not run install/build commands in the development worktree.
+- Build worktree must stay detached: `git switch --detach FETCH_HEAD`.
+- Never push to `upstream`; `origin` is the fork, `upstream` is read-only source.
+- Rebase force-push only with `--force-with-lease`; never `--force`.
+- Do not commit untracked local artifacts (`.DS_Store`, `plan/`, `reports/`, build outputs).
 
-### Remote 设定
-
-- `origin` → 用户的 fork（push 目标）
-- `upstream` → 上游官方仓库（只 fetch，不 push）
-
-### 一次性初始化命令
+Sync build worktree after committing in development:
 
 ```bash
-cd .../<ProjectName>
-git remote add upstream <official-repo-url>
-git checkout -b feat/<feature-name>
-git push -u origin feat/<feature-name>
-git worktree add --detach .../<ProjectName>_Build feat/<feature-name>
+git -C "/Users/suy/Documents/编程/TradingAgents_Modified_Build" fetch . <branch>
+git -C "/Users/suy/Documents/编程/TradingAgents_Modified_Build" switch --detach FETCH_HEAD
 ```
 
-### 三条铁律（违反即停下汇报）
-
-1. **不在构建 worktree 编辑源码**。构建 worktree 是 detached HEAD，编辑容易丢失。
-2. **不在开发 worktree 跑 `*install` 或 `*build`**。开发 worktree 必须保持 `git status` clean。
-3. **构建 worktree 切分支永远用 `--detach`**。同一分支不能同时 checkout 在两个 worktree。
-
-### 命令分流表
-
-| 操作 | 命令 | 在哪个 worktree |
-|------|------|----------------|
-| 编辑代码 | (编辑器) | 开发 |
-| `git commit` / `rebase` / `cherry-pick` | git 命令 | 开发 |
-| 同步 upstream | 见下方流程 | 开发 |
-| `push` 到 fork | `git push origin <branch>` | 开发 |
-| 类型检查 / 单元测试 | `bun run typecheck` / `bun test` 等 | 开发 |
-| 安装依赖 | `bun install` (或项目对应命令) | 构建 |
-| 编译 / 打包 / 出包 | `bun run build` 等 | 构建 |
-| 安装产物到本机 | `cp -r dist/... /Applications/` 等 | 构建 |
-| 清理构建产物 | `git clean -fxd` 或针对性 `rm -rf` | 构建 |
-
-### 跨 Worktree 同步代码
-
-每次在开发 worktree commit 后，构建 worktree 必须显式拉取最新 commit：
+Upstream sync flow from development worktree:
 
 ```bash
-cd .../<ProjectName>_Build
-git fetch . <branch-name>             # 从本地 .git 拉，不需要先 push
-git switch --detach FETCH_HEAD
-bun install                           # 仅当 package.json 变了
-bun run build                         # 重新构建
-```
-
-注意 `git fetch .` 中的 `.` 表示本地仓库 —— 这避免了"先 push 到 GitHub 再 pull 回来"的冗余路径。
-
-### 同步上游官方更新（标准流程）
-
-每周或重大版本发布后执行：
-
-```bash
-cd .../<ProjectName>     # 必须在开发 worktree
 git fetch upstream
 git checkout main
 git merge --ff-only upstream/main
 git push origin main
-git checkout feat/<feature-name>
-git rebase main                        # 解决冲突
-git push --force-with-lease origin feat/<feature-name>
+git checkout <feature-branch>
+git rebase main
+git push --force-with-lease origin <feature-branch>
 ```
 
-之后构建 worktree 用上一节的同步命令拉取 rebase 后的新 commit。
-
-### 冲突处理决策
-
-- **rebase 顺利**：force-with-lease 推送，进入下一阶段
-- **冲突可控**：手动解决，`git add` + `git rebase --continue`
-- **冲突大面积爆发**：`git rebase --abort`，从最新 main 创建新分支，对照开发计划文档**重新实施**（这是为什么开发计划必须作为可重放规格保存）
-
-### Git 干净度铁规
-
-- 开发 worktree 的 `git status` **必须**永远是 `nothing to commit, working tree clean` 后才能 rebase / 同步 upstream
-- `node_modules`、`dist/`、`build/`、`out/`、`.turbo/`、`target/`、`*.tsbuildinfo` 必须在 `.gitignore` 或 `.git/info/exclude` 里
-- 不确定时先 `git clean -nxd`（dry-run）预览，再决定是否 `-fxd` 实删
-
-### 改动最小化原则（降低 rebase 冲突）
-
-为了让上游同步尽可能无冲突：
-
-1. 改动尽量集中、聚焦在最少的文件
-2. 不顺手重构周边代码，即使看到优化空间
-3. 不在功能 commit 里夹带 lint / 格式化 / 注释润色
-4. 每次 rebase 前先 `git diff upstream/main -- <你改过的文件>` 看上游动了什么
-
-### 给 AI Agent 的硬性要求
-
-执行任何代码改动前：
-
-1. 用 `git worktree list` 确认当前所在 worktree
-2. 不在错误的 worktree 跑会留下产物的命令
-3. commit 前 `git status` 自检，不把构建产物或临时文件提交进去
-4. rebase 后强推必须用 `--force-with-lease`，禁用 `--force`
-5. 不主动 `git push` 到 main 分支或上游仓库
-
-
-## Build & Run Commands
+## Commands
 
 ```bash
-# Install (editable mode for development)
-pip install -e .
-
-# Run CLI
-tradingagents
-# or from source:
-python -m cli.main
-
-# Run a single trading analysis programmatically
-python main.py
-
-# Docker
-cp .env.example .env  # fill in API keys
-docker compose run --rm tradingagents
-
-# Docker with local Ollama models
-docker compose --profile ollama run --rm tradingagents-ollama
+pip install -e .                    # install editable package
+tradingagents                       # run CLI
+python -m cli.main                  # run CLI from source
+python main.py                      # run single analysis example
+python -m compileall -f -q tradingagents/agents  # prompt/agent syntax check
+python tests/test_akshare_smoke.py  # ad-hoc akshare API drift smoke test
 ```
 
-### Required Environment Variables
+There is no normal unit-test suite; files under `tests/` are mostly ad-hoc/API-key smoke scripts.
 
-Set the API key for your chosen LLM provider (at least one required):
-`OPENAI_API_KEY`, `GOOGLE_API_KEY`, `ANTHROPIC_API_KEY`, `XAI_API_KEY`, `DEEPSEEK_API_KEY`, `DASHSCOPE_API_KEY` (Qwen), `ZHIPU_API_KEY` (GLM), `OPENROUTER_API_KEY`
-
-For Alpha Vantage data (optional, yfinance is default): `ALPHA_VANTAGE_API_KEY`
-
-Or copy `.env.example` to `.env` and fill in keys.
-
-No test suite runner exists. The test files in `tests/` are ad-hoc API key validation scripts, not unit tests.
+Known upstream warning: `python -m compileall -f -q tradingagents cli` reports `cli/utils.py` invalid escape sequence around ``\`OLLAMA_BASE_URL\``; this is upstream v0.2.5 behavior.
 
 ## Architecture
 
-### Agent Pipeline (LangGraph StateGraph)
+Core graph: `tradingagents/graph/setup.py`
 
-The core execution flows through a compiled LangGraph `StateGraph` defined in `tradingagents/graph/setup.py`:
-
-```
-START → Analyst Team (parallel-optional) → Researcher Debate → Trader → Risk Debate → Portfolio Manager → END
+```text
+START → Analysts → Bull/Bear Research Debate → Research Manager → Trader → Risk Debate → Portfolio Manager → END
 ```
 
-1. **Analyst Team** (`tradingagents/agents/analysts/`): Market, Social, News, Fundamentals analysts run sequentially. Each calls tools via LangGraph `ToolNode`, then a "Msg Clear" node resets messages for the next analyst. Selectable via `selected_analysts` parameter.
+Analysts run sequentially: Market, Sentiment (`selected_analysts` key remains `"social"`), News, Fundamentals. Market/News/Fundamentals use LangGraph `ToolNode`; Sentiment prefetches data inside the agent (all three asset paths) and then goes directly to `Msg Clear Social`.
 
-2. **Researcher Debate** (`tradingagents/agents/researchers/`): Bull vs Bear researchers alternate for `max_debate_rounds` rounds. Research Manager (judge) resolves.
+Key files:
+- `tradingagents/graph/trading_graph.py` — graph orchestration, LLM clients, tool nodes, reflection/benchmark flow.
+- `tradingagents/graph/setup.py` — LangGraph node/edge wiring.
+- `tradingagents/graph/conditional_logic.py` — tool-call and debate loop routing.
+- `tradingagents/agents/utils/agent_states.py` — graph state schema.
+- `tradingagents/agents/utils/agent_utils.py` — shared tools, language instruction, asset-type prompt context.
+- `tradingagents/dataflows/interface.py` — `route_to_vendor()` and vendor/category registry.
+- `tradingagents/default_config.py` — config defaults and `TRADINGAGENTS_*` env overrides.
+- `tradingagents/llm_clients/factory.py` — provider routing.
 
-3. **Trader** (`tradingagents/agents/trader/`): Composes debate outcomes into an investment plan.
+## Config / Data Routing
 
-4. **Risk Debate** (`tradingagents/agents/risk_mgmt/`): Aggressive, Conservative, Neutral debators rotate for `max_risk_discuss_rounds` rounds.
+Important config keys:
+- `data_vendors`: `core_stock_apis`, `technical_indicators`, `news_data`, `fundamental_data`, `crypto_market_data`, `cn_market_data`, `cn_sentiment_data`.
+- `tool_vendors` overrides `data_vendors` per tool.
+- `set_config()` deep-merges nested dicts; `TradingAgentsGraph.__init__` calls `set_config()`, so config changes after graph init do not affect routing.
+- `ccxt_symbol` overrides the ticker arg for CCXT/OKX market data.
+- `benchmark_ticker` overrides `benchmark_map`; otherwise reflection alpha benchmark is selected by ticker suffix.
+- `output_language` is applied by `get_language_instruction()` to analysts, researchers, risk debators, Research Manager, Trader, and Portfolio Manager.
 
-5. **Portfolio Manager** (`tradingagents/agents/managers/portfolio_manager.py`): Makes final decision.
+Asset type helper:
+- Use `agent_utils.get_asset_type()` / `get_asset_prompt_context()` for stock/A股/crypto detection; do not duplicate `data_vendors` checks in agents.
+- A-share mode: `core_stock_apis == "akshare"` and `technical_indicators == "akshare"`.
+- Crypto mode: `core_stock_apis == "ccxt"` and `technical_indicators == "ccxt"`.
 
-State flows through `AgentState` (extends LangGraph `MessagesState`) in `tradingagents/agents/utils/agent_states.py`.
+## Agent / Prompt Rules
 
-### Data Layer
+Pipeline responsibility boundary:
+- Analysts: describe objective evidence only; no entry/stop/sizing/trade recommendation.
+- Bull/Bear Researchers: argue evidence quality/direction; do not compute entry/exit targets or risk/reward ratios.
+- Research Manager: synthesize debate into a directional research brief; no concrete sizing.
+- Trader: translate Research Manager brief into execution parameters.
+- Risk Debators: debate risk parameters only; do not redefine investment direction or targets.
+- Portfolio Manager: only final decision authority.
 
-- **Tool definitions**: `tradingagents/agents/utils/{core_stock_tools,technical_indicators_tools,fundamental_data_tools,news_data_tools}.py` — LangChain `@tool` functions that call `route_to_vendor()`.
-- **Vendor routing**: `tradingagents/dataflows/interface.py` — `route_to_vendor()` dispatches to yfinance, Alpha Vantage, or CCXT based on config. Supports comma-separated fallback chains and automatic fallback on `AlphaVantageRateLimitError`.
-- **Vendor implementations**: `tradingagents/dataflows/y_finance.py` and `tradingagents/dataflows/alpha_vantage_*.py`.
-- **CCXT vendor**: `tradingagents/dataflows/ccxt_data.py` — crypto exchange data (default: OKX). Only registered for `get_stock_data` and `get_indicators`; fundamentals/news stay on other vendors. Reads `ccxt_symbol` from config to override the `symbol` arg transparently.
-- **Config routing**: `tradingagents/dataflows/config.py` holds a module-level config singleton; tool-level `tool_vendors` overrides category-level `data_vendors`.
+Prompt patterns:
+- Agent factories return callable node functions, not classes: `create_X(llm) -> node`.
+- Analyst tool-calling outer template should stay: `"Tools available: {tool_names}.\n\n{system_message}\n\nCurrent date: {current_date}. {instrument_context}"`.
+- Completion gate is code-level: `if len(result.tool_calls) == 0: report = result.content`.
+- Avoid generic multi-agent boilerplate like “another assistant will help where you left off”; it weakens mandatory tool behavior.
+- `get_news(ticker, ...)` is strict ticker-based, not free-text search; prompts must not ask for CEO names or sentiment keywords as query strings.
+- `get_indicators(indicator=...)` accepts comma-separated indicators; prompt should request one call per timeframe, not one call per indicator.
+- `sentiment_analyst.py` has no ToolNode: it prefetches data and makes one LLM call across all three asset paths (US stock = yfinance+StockTwits+Reddit; A-share = 3-layer akshare; crypto = F&G + CoinGecko votes). `trading_graph._create_tool_nodes()` must not register `social`. `crypto_sentiment_tools.py` exposes `get_crypto_smart_money` / `get_crypto_margin_leverage` as `@tool`s but they are not currently bound to any analyst — either wire them in or treat as dead code.
+- market/news/fundamentals/sentiment prompts are split by stock/A股/crypto; update the relevant `_build_*system_message()` branch instead of mixing all assets into one long prompt.
 
-### LLM Client Layer
+Prompt/graph smoke test: after editing asset-specific prompts or ToolNode wiring, use a dummy LLM to initialize stock/A股/crypto configs and compile `TradingAgentsGraph` without API keys.
 
-- **Factory**: `tradingagents/llm_clients/factory.py` — `create_llm_client(provider, model)` returns a `BaseLLMClient`.
-- **OpenAI-compatible**: OpenAI, xAI, DeepSeek, Qwen, GLM, Ollama, OpenRouter all route through `OpenAIClient` with provider-specific base URLs.
-- **Native clients**: `AnthropicClient`, `GoogleClient`, `AzureOpenAIClient` use their respective LangChain integrations.
-- **Model catalog**: `tradingagents/llm_clients/model_catalog.py` — `MODEL_OPTIONS` dict drives CLI model selection menus.
+## Asset-Specific Gotchas
 
-### Memory / Reflection System
+### Crypto / CCXT / OKX
 
-- `FinancialSituationMemory` (`tradingagents/agents/utils/memory.py`) uses BM25 (not embeddings) for offline similarity matching.
-- `Reflector` (`tradingagents/graph/reflection.py`) generates post-hoc reflections on each agent's decisions and stores them as (situation, recommendation) pairs.
-- Memory instances: bull, bear, trader, invest_judge, portfolio_manager — each updated independently via `reflect_and_remember(returns)`.
+Symbol / ticker:
+- **Single ticker source**: CLI crypto mode prompts for one CCXT pair (e.g. `BTC/USDT`); `cli/main.py` derives `company_of_interest` via `ccxt_to_display_ticker()`. Previous dual yfinance + CCXT input was removed in `7361e60`.
+- `tradingagents/dataflows/crypto_symbols.py` is the single source for crypto ticker conversion. `ccxt_to_base()` accepts any of `BTC/USDT` / `ETH/USDT:USDT` / `BTC-USDT-SWAP` / `BTC` and returns the bare base. All vendor lookups (CoinGecko id, DefiLlama slug, OKX ccy, RSS news base currency) flow through `ccxt_to_base()` — do not parse tickers ad-hoc in agent or vendor code.
+- `CRYPTO_SYMBOL_MAP` is keyed by base currency. Adding a new coin = one entry mapping base → `{cg_id, defillama_slug}`.
 
-### Signal Processing
+Vendor / endpoint layout:
+- `tradingagents/dataflows/okx_data.py` — OKX v5 REST endpoints via `requests` (rubik + public + market). All public endpoints; no HMAC signature helper is implemented.
+- `tradingagents/dataflows/free_crypto_news_data.py` — free/no-key public RSS news from major crypto outlets; filters by base currency plus macro/regulatory keywords.
+- `tradingagents/dataflows/coingecko_data.py` — Single `/coins/{id}` HTTP call shared by fundamentals (`get_coingecko_fundamentals_block`) and sentiment (`get_coingecko_sentiment_block`); cache by `cg_id`. Optional `COINGECKO_DEMO_API_KEY`.
+- `tradingagents/dataflows/defillama_data.py` — `/protocol/{slug}` + `/summary/fees/{slug}`. No auth. Slow API: 25s timeout + 1 retry (see `ad1c06f`); current TVL must be pulled from the historical array's last element, not the top-level field (see `579dc1f`).
+- `tradingagents/dataflows/alternative_me_data.py` — `/fng/?limit=N`. No auth. F&G consumed by sentiment_analyst pre-fetch only.
 
-`SignalProcessor` (`tradingagents/graph/signal_processing.py`) extracts the final 5-tier rating from the Portfolio Manager's verbose decision text.
+Analyst → tool wiring:
+- `crypto_market_tools.py` — 7 rubik + 5 new public-endpoint tools (`get_okx_ticker_snapshot`, `get_okx_perp_basis`, `get_okx_funding_rate_now`, `get_okx_open_interest_now`, `get_okx_liquidation_orders`).
+- `crypto_news_tools.py` — `get_free_crypto_news`, `get_okx_exchange_announcements`, `get_okx_delivery_events`.
+- `crypto_fundamental_tools.py` — `get_token_profile`, `get_protocol_metrics`.
+- `crypto_sentiment_tools.py` — defines `get_crypto_smart_money` and `get_crypto_margin_leverage` as `@tool`s, but neither is currently bound to any analyst. Sentiment runs as pre-fetch only (F&G + CoinGecko via `sentiment_analyst.py` crypto branch).
 
-## Key Configuration
+OKX endpoint quirks (learned the hard way during this revamp):
+- Contracts stat endpoints generally require `instId` (`BTC-USDT-SWAP`); exceptions: `/rubik/contracts/open-interest-volume` and `/rubik/option/open-interest-volume-ratio` take `ccy`.
+- `/public/liquidation-orders` requires `uly` (underlying, e.g. `BTC-USDT`), not `ccy`; passing `ccy` returns empty (`91639a0`).
+- `/rubik/contracts/open-interest-volume-aggregated` rejects `4H` — use `1H` default (`15e984c`).
+- `/support/announcements` response is nested two levels: `data[0]['details']` not `data[0]` (`4b36958`).
+- `open-interest-history` row layout: `[ts, oi, oiCcy, oiUsd]`.
+- `_okx_request()` retries network errors and rate-limit code `50011`; per-function rate-limiter does not coordinate across different rubik endpoints.
 
-`tradingagents/default_config.py` defines `DEFAULT_CONFIG`. Key fields:
-- Defaults: `llm_provider="openai"`, `deep_think_llm="gpt-5.4"`, `quick_think_llm="gpt-5.4-mini"`
-- `llm_provider`, `deep_think_llm`, `quick_think_llm` — provider and model selection
-- `max_debate_rounds`, `max_risk_discuss_rounds` — debate depth
-- `data_vendors` / `tool_vendors` — per-category or per-tool data source routing
-- `ccxt_exchange` / `ccxt_symbol` — CCXT exchange id (default "okx") and trading pair (e.g. "BTC/USDT"); `ccxt_symbol` overrides the `symbol` arg in CCXT vendor functions
-- `output_language` — non-English output for user-facing agents (debate stays English)
-- Provider-specific kwargs: `google_thinking_level`, `openai_reasoning_effort`, `anthropic_effort`
-- `backend_url` — custom endpoint for OpenAI-compatible providers (self-hosted, proxies)
-- Cache/logs default to `~/.tradingagents/`
+Auth-gated OKX endpoints that LOOK public but aren't (do not wire without HMAC auth):
+- `/public/economic-calendar` returns `50103 OK-ACCESS-KEY required`; no tool is currently exposed for it.
+- `/finance/savings/public-borrow-info` returns 403 without auth; no fundamentals tool is currently exposed for it.
 
-### Python API Quick Start
+CCXT:
+- CCXT cache key does not include exchange name; clear cache when switching `ccxt_exchange`.
+- CCXT vendor only handles `get_stock_data` and `get_indicators`; all crypto news/fundamentals/sentiment go through the dedicated vendors above.
 
-```python
-from tradingagents.graph.trading_graph import TradingAgentsGraph
-from tradingagents.default_config import DEFAULT_CONFIG
+ENV:
+- `COINGECKO_DEMO_API_KEY` — optional; missing → anonymous public endpoint (stricter IP throttling).
+- Crypto news RSS, DefiLlama, Alternative.me, and current OKX public endpoints require no env vars.
+- No OKX env vars currently used.
 
-config = DEFAULT_CONFIG.copy()
-config["llm_provider"] = "openai"
-config["deep_think_llm"] = "gpt-5.4"
-config["quick_think_llm"] = "gpt-5.4-mini"
+### A-share / AkShare
 
-ta = TradingAgentsGraph(debug=True, config=config)
-_, decision = ta.propagate("NVDA", "2026-01-15")
-print(decision)  # One of: BUY, OVERWEIGHT, HOLD, UNDERWEIGHT, SELL
-```
+- External ticker format: `600519.SH`, `000001.SZ`, `430047.BJ`; state/agents preserve this format.
+- Vendor converts via `_resolve_a_share_symbol(symbol, fmt)`: `6digit` for many APIs, `exchange_prefix` (`SH600519`) for financial statements and some detail endpoints.
+- AkShare financial statement APIs require `exchange_prefix`: `stock_balance_sheet_by_report_em`, `stock_cash_flow_sheet_by_report_em`, `stock_profit_sheet_by_report_em`.
+- Margin APIs require `YYYYMMDD`, not `YYYY-MM-DD`.
+- `cn_market_data` and `cn_sentiment_data` are akshare-only categories with no fallback.
+- A-share OHLCV defaults to `adjust="qfq"`; `get_akshare_limit_status` infers limit-up/down from daily returns.
+- `akshare_retry()` retries requests errors and JSONDecodeError/KeyError with throttle/backoff; programming errors should propagate.
+- Known AkShare API drift: `stock_em_jgdy_detail` → `stock_jgdy_detail_em`; use `stock_jgdy_tj_em(date=YYYYMMDD)` then filter by ticker for institutional visits.
+- `news_cctv` replaced stale `news_economic_baidu`; A-share global news filters CCTV daily transcripts by Shenwan industry keywords.
+- A-share sentiment prefetches three layers from `cn_sentiment_tools.py`: retail hot-rank, sell-side research, buy-side institutional visits.
+- A-share fundamentals append `get_earnings_forecast`, `get_shareholder_count`, `get_valuation_comparison` to the four core fundamentals tools.
 
-## Key Patterns
+## LLM / CLI Notes
 
-### Gotchas & Non-Obvious Behaviors
+- OpenAI-compatible providers include OpenAI, custom_openai, xAI, DeepSeek, Qwen/Qwen-CN, GLM/GLM-CN, MiniMax/MiniMax-CN, Ollama, OpenRouter.
+- `custom_openai` uses `CUSTOM_OPENAI_BASE_URL` / `CUSTOM_OPENAI_API_KEY`; `custom_anthropic` uses `CUSTOM_ANTHROPIC_BASE_URL` / `CUSTOM_ANTHROPIC_API_KEY`.
+- CLI interactive selection helpers live mostly in `cli/utils.py`; simple prompt wrappers and run assembly live in `cli/main.py`.
+- Adding CLI steps requires manual step-number renumbering in `cli/main.py`.
 
-- Agent creation functions follow the pattern `create_X_analyst(llm, memory=None) -> function` — they return a callable node function, not a class.
-- `create_msg_delete()` returns a state-cleaning function used between analysts to reset the message history.
-- `ConditionalLogic` methods on `state["messages"][-1].tool_calls` determine if an analyst needs more tool calls or should proceed.
-- Debate round counting: investment debate uses `2 * max_debate_rounds` (2 agents), risk debate uses `3 * max_risk_discuss_rounds` (3 agents).
-- `tool_vendors` overrides `data_vendors` — tool-level config takes precedence over category-level.
-- `output_language` 覆盖范围（v0.2.5 起）：所有输出节点均调用 `get_language_instruction()`——4个analysts、bull/bear researchers、risk debators、`research_manager`（`investment_plan`）、`trader`（`trader_investment_plan`）、`portfolio_manager`。v0.2.5 前的行为是辩论节点保持英语，但 upstream 已通过 feat(i18n) 将多语言扩展到全部 agents。
-- `SignalProcessor` uses `quick_thinking_llm` (not regex) to extract the 5-tier rating from verbose text.
-- Memory uses BM25 (offline, no API calls) — no embedding model needed.
-- `TradingAgentsGraph.__init__` calls `set_config()` on the dataflows interface, so config changes after init won't propagate to data routing.
-- CCXT vendor reads `ccxt_symbol` from config (not the `symbol` function arg) — programmatic users must set `config["ccxt_symbol"]` when using CCXT, or the raw ticker will be passed to the exchange (likely invalid).
-- CCXT cache key (`{symbol}-CCXT-data-{dates}.csv`) does not include exchange name — switching `ccxt_exchange` requires cache cleanup to avoid stale data.
-- Adding new CLI steps requires manual renumbering of all subsequent steps (step numbers are hardcoded strings in `cli/main.py`).
-- OKX rubik contracts stat 端点（`/api/v5/rubik/stat/contracts/*`）大多数需要 `instId`（如 `BTC-USDT-SWAP`），而非 `ccy`（如 `BTC`）。例外：`/open-interest-volume` 和 `/option/open-interest-volume-ratio` 使用 `ccy`。文档看似通用，但实际测试中 `ccy` 会返回 `"instId can't be empty"` 400 错误。
-- OKX `/rubik/stat/contracts/open-interest-history` 响应为 4 字段数组：`[ts, oi, oiCcy, oiUsd]`，不是 3 字段。
-- OKX crypto market 数据层：`okx_data.py` 用 `requests` 库直接调 REST API（rubik stat 端点不在 CCXT unified API 中）；`crypto_market_tools.py` 封装为 LangChain tools；`market_analyst.py` 通过 `is_crypto` 检测（`core_stock_apis == "ccxt"` **且** `technical_indicators == "ccxt"`）条件加载这些工具，与 CLI 同时赋值两个 vendor 的行为保持一致。
-- OKX `_okx_request()` 的重试策略：网络错误（`ConnectionError`/`Timeout`）和 API 限流错误（code `50011`）分开处理。`50011` 触发指数退避重试（2s → 4s → 8s，最多 2 次），耗尽后才抛 `ValueError`。`okx_request_limiter` 装饰器仅防止同一函数内的快速连续调用，不同 rubik 端点各自独立计时、不跨函数协调，因此 LLM 顺序调用多个工具时仍可能触发 IP 级别限流——这正是需要 50011 重试的原因。
-- LangGraph analyst 工具双注册要求：给 analyst 添加工具时必须同时更新两处——(1) analyst 文件内 `llm.bind_tools(tools)`（告诉 LLM 有哪些工具）；(2) `trading_graph.py` `_create_tool_nodes()` 里的 `ToolNode([...])`（决定哪些工具能实际执行）。只更新前者会导致 LLM 发起工具调用但 ToolNode 找不到该工具，静默失败。
-- `config.py` 的 `set_config()` 对嵌套 dict（如 `data_vendors`）做深合并而非整体替换；`initialize_config()` 使用 `deepcopy`，`DEFAULT_CONFIG` 不会通过浅拷贝被外部代码意外修改。
-- 所有 analyst（market/news/social/fundamentals）均使用 completion-gate 风格的 system prompt（而非通用多智能体 boilerplate），明确禁止在所有工具调用完成前输出报告。通用 boilerplate 中的 "another assistant will help where you left off" 措辞会削弱 MANDATORY 工具指令的约束力，不应用于任何有强制工具要求的节点。
-- `get_news(ticker, ...)` 底层两个实现（yfinance: `yf.Ticker(ticker).get_news()`；Alpha Vantage: `params={"tickers": ticker}`）均为严格 ticker-based，不支持自由文本查询词。设计 news/sentiment analyst prompt 时不可要求 LLM 传入 CEO 名、情绪词等作为查询参数。
-- `get_indicators` 的 `indicator` 参数支持逗号分隔多个指标（实现内部 split 处理）。设计 prompt 时应引导 LLM 每个 timeframe 一次传入所有指标，避免逐个调用（4 TF × 8 指标 = 32 次 → 4 次）。
-- Risk debators（aggressive/conservative/neutral）通过 `state.get("investment_plan", "")` 可获取 research_manager 的原始投资计划；`state["trader_investment_plan"]` 是 trader 的执行决策。两者都是 risk debate 的有效上下文输入。
-- **Agent pipeline 职责边界原则**: 每层 agent 只做本层的判断，不替下游决策。Analysts → 客观市场状态描述（禁止输出 "Trading Implications/Synthesis" 或 entry/stop/sizing 建议）；Bull/Bear → 举证说理（不做结论）；Research Manager → 综合辩论出方向性研究结论（不是最终投资决策，是给 Trader 的 brief）；Trader → 将 RM 的研究结论**执行参数化**（entry/stop/target/sizing），不独立重评投资逻辑；Risk Debators → 只辩论风险参数（仓位大小/止损位置/对冲），不重新评估投资方向；Portfolio Manager → 唯一的最终决策者。
-- **Analyst prompt 模板一致性**: 四个 analyst 的 `ChatPromptTemplate` 外层均应使用同一模式：`"Tools available: {tool_names}.\n\n{system_message}\n\nCurrent date: {current_date}. {instrument_context}"`；news/social/fundamentals 曾有带 "Call ALL required tools / Do NOT output until..." 的不同外层，导致禁令重复且格式不统一。实际的工具调用门控由代码 `if len(result.tool_calls) == 0` 负责，prompt 中的禁令语句是冗余的。
-- **Analyst prompt 中的合法 vs. 越界语言**: `"bullish/bearish/neutral"`（市场状态描述）合法；`"Trading Implications"`、`"Trading Synthesis"`、`"entry zone"`、`"stop-loss placement"`、`"risk/reward assessment"`（交易判断）越界——这些词汇会引导 analyst 代替 Trader/PM 做决策。每个 analyst 的 "Close with..." 结尾指令必须附带"Your report ends here"终止语，否则 LLM 会自然地在 closing section 之后续写交易建议（实测：market analyst 输出完整的交易情景+止损+目标价；social analyst 输出"应谨慎对待多头头寸的扩展"；fundamentals analyst 输出"适合风险承受能力强的投资者"）。
-- **每层 agent 的越界语言（贯穿全链）**: 上一条 analyst 越界词规则同样适用于下游层。Bull/Bear researchers 越界词：`entry`、`risk/reward for entry`、`entry timing`、`upside/downside ratio`、`target price`（researcher 论证方向与证据质量，不量化期望值，不推导 entry/exit 价格——实测 bull 多次产出完整"Risk/Reward Is Asymmetric"章节并给出"1:1.5 to 1:2.5 for a long position"）；Research Manager 越界词：`price levels for entry`、`position size in shares/%`、定量仓位比例建议（"适中偏保守比例"等）——RM 给研究简报和定性确信度，Trader 负责把确信度翻译成具体规模；Risk debators 越界词：`entry zone`、`entry price levels`、`target price`、`entry timing conditions`（risk 层只动 size/stop/staging 节奏/hedging，不重定义入场价格、入场时机条件、或出场目标价——实测 aggressive analyst 产出"Staged Exit Structure"并给出具体目标价）。每层 agent 只用本层语言。
+## Memory / Reflection
 
-### Development Workflow
+- Memory uses BM25/offline matching; no embeddings needed.
+- `TradingMemoryLog` stores final decisions and resolves outcomes on later same-ticker runs.
+- Reflection alpha uses `_resolve_benchmark()` and labels alpha as `Alpha vs <benchmark>`.
 
-- **Edit 工具前置要求**: 调用 `Edit` 前必须用 `Read` 工具（非 `rtk read`）读取目标文件，否则报 "File has not been read yet" 错误；`rtk read` 不满足此前置条件。
-- **供应商参数传递**: 供应商实现使用`**kwargs`接受额外参数，确保向后兼容。新参数可安全添加到工具层，非相关供应商会忽略这些参数。
-- **工具层修改模式**: 修改工具函数时，添加参数并通过`route_to_vendor()`传递。CCXT支持`timeframe`参数用于多时间周期数据获取。
-- **CLI 函数分工**: `select_*` 交互选择函数放 `cli/utils.py`（questionary）；简单文本输入 `get_*` 放 `cli/main.py`（`typer.prompt`）；`create_question_box()` 提供展示框，prompt 函数只做裸输入。`main.py` 中的 `get_ticker`/`get_analysis_date` 本地定义有意覆盖 `from cli.utils import *` 导入的同名函数。
-- **`data_vendors` 键名**: 精确键名为 `core_stock_apis`、`technical_indicators`、`news_data`、`fundamental_data`、`crypto_market_data`；误用 `news`/`fundamentals` 等错误键名会静默无效（`set_config()` 深合并不报错）。
-- **加密货币双 ticker 约定**: CLI 加密模式同时采集两个 ticker——yfinance 格式（如 `BTC-USD`，用于新闻/基本面，同时作为 `propagate()` 的主 ticker）与 CCXT 格式（如 `BTC/USDT`，写入 `config["ccxt_symbol"]`，用于行情/技术面）。
-- **A 股模式判定**: `core_stock_apis == "akshare"` 且 `technical_indicators == "akshare"` 同时成立才视为 A 股，与 crypto 双条件检测对齐。CLI 选择 "a_share" 后自动将 6 个 vendor 全设为 akshare（core_stock_apis / technical_indicators / news_data / fundamental_data / cn_market_data / cn_sentiment_data）。
-- **A 股 ticker 格式**: 外部格式为 `600519.SH` / `000001.SZ` / `430047.BJ`；validator 正则 `^\d{6}\.(SH|SZ|BJ)$`。vendor 内部通过 `_resolve_a_share_symbol(symbol, fmt)` 转换：`"6digit"` → `600519`，`"exchange_prefix"` → `SH600519`（财务报表 API 要求此格式）。analyst / state 层始终使用外部格式。
-- **akshare 财务报表 API 格式要求**: `stock_balance_sheet_by_report_em` / `stock_cash_flow_sheet_by_report_em` / `stock_profit_sheet_by_report_em` 需要 `exchange_prefix` 格式（`SH600519`），而非 6 位纯数字；误用 6 位格式会返回 `None` 并触发 `'NoneType' is not subscriptable` 错误。
-- **akshare 融资融券 API 日期格式**: `stock_margin_detail_sse` / `stock_margin_detail_szse` 需要 `YYYYMMDD` 格式（无破折号），如 `'20260430'`；误用 `YYYY-MM-DD` 格式会静默失败或返回空 DataFrame。
-- **akshare 接口命名漂移风险**: 每次 akshare 升级前先跑 `python tests/test_akshare_smoke.py` 验证。已知变更：`stock_em_jgdy_detail` 已更名为 `stock_jgdy_detail_em`；`stock_lhb_stock_statistic_um` 不存在，实际函数为 `stock_lhb_stock_detail_date_em`（按 symbol 返回历史上榜日期）。`stock_jgdy_detail_em(symbol=...)` 签名已失效（返回 NoneType 错误），改用 `stock_jgdy_tj_em(date=YYYYMMDD)` 全量数据后按 ticker 过滤。
-- **`cn_market_data` / `cn_sentiment_data` category 仅 akshare 一个 vendor，无 fallback**；akshare 失败直接抛错（错误信息会被 vendor 函数的 `try/except` 捕获并以字符串形式返回给 LLM，不会崩溃整个 pipeline）。
-- **A 股 OHLCV 默认 `adjust="qfq"`（前复权）**，与美股 yfinance 默认行为一致。`get_akshare_limit_status` 基于每日收盘价涨跌幅推算（≥+9.9% = 涨停，≤-9.9% = 跌停），不调用额外 API，无需注意限流。
-- **akshare 重试机制**: `akshare_common.py::akshare_retry()` 提供指数退避（2→4→8s，最多 3 次），内置 0.5s pre-call throttle（替代原 `_throttle()`）。只重试 requests 网络异常和 JSONDecodeError / KeyError；编程错误（TypeError 等）立即传播。耗尽后抛 `AkshareNetworkError`，vendor 函数的 outer try/except 将其转字符串返回 LLM。
-- **`news_cctv` 行业过滤原理**: `get_akshare_global_news` 替换了 `news_economic_baidu`（已停更），改为每日循环调用 `ak.news_cctv(date=YYYYMMDD)` 并用股票所属 Shenwan 行业名及其 2 字前缀做 substring 匹配过滤。`stock_hot_rank_detail_em` 需要 `exchange_prefix` 格式（`SH601127`）；`stock_research_report_em` 需要 6 位数字格式（`601127`）。
-- **`sentiment_analyst` 架构（v0.2.5）**: `social_media_analyst` 已重命名为 `sentiment_analyst`（`tradingagents/agents/analysts/sentiment_analyst.py`）；`social_media_analyst.py` 现为 backwards-compatibility shim。新设计**预取**数据后注入 prompt（无 tool-calling）：US/Crypto 模式预取 Yahoo Finance news + StockTwits + Reddit；A 股模式预取三层情绪数据（retail hot-rank / sell-side research / buy-side institutional visits）。对应 `_build_system_message()` 和 `_build_a_share_system_message()` 两个构建函数。
-- **A 股 sentiment analyst 工具集切换**: A 股模式（`core_stock_apis == "akshare"` 且 `technical_indicators == "akshare"`）下 `sentiment_analyst` 从 `cn_sentiment_tools.py` 预取三层情绪数据（retail/sell-side/buy-side），而非 Yahoo Finance + StockTwits + Reddit；`cn_sentiment_data` 需在 config `data_vendors` 中设为 `akshare`（CLI 选择 a_share 后 6 个 vendor 均自动设置）。
-- **A 股 fundamentals 追加工具**: A 股模式下 fundamentals_analyst 在四张表基础上追加 `get_earnings_forecast` / `get_shareholder_count` / `get_valuation_comparison`；这三个工具归属 `fundamental_data` category（与四张表共用 akshare vendor）。`get_earnings_forecast` 遍历最近 8 个季报日期（向前回溯 2 年）以找到有预告记录的期间。
+## Development Hygiene
+
+- Prefer minimal, focused edits; avoid formatting churn because this branch rebases against upstream.
+- When adding analyst tools, update both `llm.bind_tools(tools)` and `TradingAgentsGraph._create_tool_nodes()` unless the agent is intentionally no-ToolNode like Sentiment.
+- When an OKX endpoint turns out to require auth, prefer a graceful stub (placeholder string) over removing the function — leaves the door open for HMAC-signed wiring later. Document the stub at the function docstring AND in this file's OKX section.
+- Use `git diff --check` before committing prompt/doc rewrites.
+- Commit only explicit source/doc files; leave `.DS_Store`, `plan/`, and build-worktree `reports/` untracked unless the user explicitly asks otherwise.

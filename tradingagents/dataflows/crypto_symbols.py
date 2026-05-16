@@ -54,11 +54,6 @@ def get_cg_id(symbol: str) -> str:
     return base.lower()
 
 
-def get_cp_currency(symbol: str) -> str:
-    """Return CryptoPanic currency code (uppercase base) for any CCXT/OKX symbol."""
-    return ccxt_to_base(symbol)
-
-
 def get_defillama_slug(symbol: str) -> str | None:
     """Return DefiLlama protocol slug, or None if not a DeFi protocol."""
     base = ccxt_to_base(symbol)

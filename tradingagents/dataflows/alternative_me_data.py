@@ -2,7 +2,7 @@
 
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import requests
 
@@ -32,9 +32,17 @@ def get_fear_greed_block(curr_date: str, look_back_days: int = 30) -> str:
         return _CACHE[cache_key]["data"]
 
     try:
+        end_date = datetime.strptime(curr_date, "%Y-%m-%d").date()
+    except ValueError:
+        result = f"[Fear&Greed] Invalid analysis date: {curr_date}."
+        _CACHE[cache_key] = {"ts": time.time(), "data": result}
+        return result
+
+    request_limit = max(look_back_days + 30, 90)
+    try:
         resp = requests.get(
             f"{_API_BASE}/fng/",
-            params={"limit": look_back_days, "format": "json"},
+            params={"limit": request_limit, "format": "json"},
             timeout=10,
         )
         resp.raise_for_status()
@@ -45,38 +53,43 @@ def get_fear_greed_block(curr_date: str, look_back_days: int = 30) -> str:
         _CACHE[cache_key] = {"ts": time.time(), "data": result}
         return result
 
-    entries = data.get("data", [])
+    start_date = end_date - timedelta(days=look_back_days - 1)
+    entries = []
+    for entry in data.get("data", []):
+        try:
+            entry_date = datetime.fromtimestamp(
+                int(entry.get("timestamp", "")), tz=timezone.utc
+            ).date()
+        except Exception:
+            continue
+        if start_date <= entry_date <= end_date:
+            entries.append((entry_date, entry))
+
+    entries.sort(key=lambda item: item[0], reverse=True)
     if not entries:
-        result = "[Fear&Greed] No data returned."
+        result = f"[Fear&Greed] No data available for {start_date} to {end_date}."
         _CACHE[cache_key] = {"ts": time.time(), "data": result}
         return result
 
-    latest = entries[0]
+    latest = entries[0][1]
     latest_val = latest.get("value", "N/A")
     latest_label = latest.get("value_classification", "N/A")
 
-    # Recent 7-day summary
     recent = entries[:7]
-    avg_7d = sum(int(e.get("value", 0)) for e in recent) / max(len(recent), 1)
-    avg_30d = sum(int(e.get("value", 0)) for e in entries) / max(len(entries), 1)
+    avg_7d = sum(int(e.get("value", 0)) for _, e in recent) / max(len(recent), 1)
+    avg_period = sum(int(e.get("value", 0)) for _, e in entries) / max(len(entries), 1)
 
-    # Build compact history (last 14 days)
     hist_lines = []
-    for entry in entries[:14]:
-        ts = entry.get("timestamp", "")
-        try:
-            date_str = datetime.fromtimestamp(int(ts), tz=timezone.utc).strftime("%Y-%m-%d")
-        except Exception:
-            date_str = ts
+    for entry_date, entry in entries[:14]:
         val = entry.get("value", "?")
         label = entry.get("value_classification", "")
-        hist_lines.append(f"  {date_str}: {val} ({label})")
+        hist_lines.append(f"  {entry_date:%Y-%m-%d}: {val} ({label})")
 
     lines = [
-        f"Fear & Greed Index (Crypto, {look_back_days}d history):",
-        f"  Latest: {latest_val} — {latest_label}",
-        f"  Avg 7d: {avg_7d:.0f}  Avg 30d: {avg_30d:.0f}",
-        "  14-day history:",
+        f"Fear & Greed Index (Crypto, {start_date} to {end_date}):",
+        f"  Latest as of {end_date}: {latest_val} — {latest_label}",
+        f"  Avg 7d: {avg_7d:.0f}  Avg period: {avg_period:.0f}",
+        "  Recent history:",
     ] + hist_lines
 
     result = "\n".join(lines)

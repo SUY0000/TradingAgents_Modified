@@ -140,6 +140,20 @@ def _save_cache(df: pd.DataFrame, path: str) -> None:
         logger.warning(f"Failed to save OKX cache to {path}: {e}")
 
 
+def _compact_csv_block(title: str, df: pd.DataFrame, max_rows: int = 8) -> str:
+    if df.empty:
+        return f"{title}: no rows."
+    numeric = df.select_dtypes(include=["number"])
+    lines = [f"{title}: {len(df)} rows from {df.iloc[0].get('timestamp', 'N/A')} to {df.iloc[-1].get('timestamp', 'N/A')}"]
+    if not numeric.empty:
+        latest = numeric.iloc[-1]
+        first = numeric.iloc[0]
+        for col in numeric.columns[:4]:
+            lines.append(f"  {col}: latest={latest[col]:g}, change={latest[col] - first[col]:+g}")
+    sample = df.tail(max_rows).to_csv(index=False).strip()
+    return "\n".join(lines + ["  Recent rows:", sample])
+
+
 # ---------------------------------------------------------------------------
 # REST API request helpers
 # ---------------------------------------------------------------------------
@@ -304,7 +318,7 @@ def get_okx_funding_rate(
     cache_file = _cache_path("funding_rate", symbol, start_date, end_date)
     cached = _load_cache(cache_file)
     if cached is not None:
-        return cached.to_csv(index=False)
+        return _compact_csv_block("OKX cached data", cached)
 
     try:
         data = _okx_fetch_all(
@@ -341,7 +355,7 @@ def get_okx_funding_rate(
     numeric_cols = df.select_dtypes(include=["float64", "float32"]).columns
     df[numeric_cols] = df[numeric_cols].round(4)
     _save_cache(df, cache_file)
-    return df.to_csv(index=False)
+    return _compact_csv_block(f"OKX Funding Rate History ({inst_id})", df)
 
 
 @okx_request_limiter(delay_ms=400)
@@ -379,7 +393,7 @@ def get_okx_open_interest_history(
     cache_file = _cache_path(f"oi_history_{period}", symbol, start_date, end_date)
     cached = _load_cache(cache_file)
     if cached is not None:
-        return cached.to_csv(index=False)
+        return _compact_csv_block("OKX cached data", cached)
 
     try:
         data = _okx_fetch_all(
@@ -423,7 +437,7 @@ def get_okx_open_interest_history(
     numeric_cols = df.select_dtypes(include=["float64", "float32"]).columns
     df[numeric_cols] = df[numeric_cols].round(4)
     _save_cache(df, cache_file)
-    return df.to_csv(index=False)
+    return _compact_csv_block(f"OKX Open Interest History ({inst_id}, {period})", df)
 
 
 @okx_request_limiter(delay_ms=400)
@@ -462,7 +476,7 @@ def get_okx_long_short_ratio(
     cache_file = _cache_path(f"ls_ratio_{period}", symbol, start_date, end_date)
     cached = _load_cache(cache_file)
     if cached is not None:
-        return cached.to_csv(index=False)
+        return _compact_csv_block("OKX cached data", cached)
 
     try:
         data = _okx_fetch_all(
@@ -493,7 +507,7 @@ def get_okx_long_short_ratio(
     numeric_cols = df.select_dtypes(include=["float64", "float32"]).columns
     df[numeric_cols] = df[numeric_cols].round(4)
     _save_cache(df, cache_file)
-    return df.to_csv(index=False)
+    return _compact_csv_block(f"OKX Long/Short Ratio ({inst_id}, {period})", df)
 
 
 @okx_request_limiter(delay_ms=400)
@@ -531,7 +545,7 @@ def get_okx_taker_volume(
     cache_file = _cache_path(f"taker_vol_{period}", symbol, start_date, end_date)
     cached = _load_cache(cache_file)
     if cached is not None:
-        return cached.to_csv(index=False)
+        return _compact_csv_block("OKX cached data", cached)
 
     try:
         data = _okx_fetch_all(
@@ -580,7 +594,7 @@ def get_okx_taker_volume(
     numeric_cols = df.select_dtypes(include=["float64", "float32"]).columns
     df[numeric_cols] = df[numeric_cols].round(4)
     _save_cache(df, cache_file)
-    return df.to_csv(index=False)
+    return _compact_csv_block(f"OKX Taker Volume ({inst_id}, {period})", df)
 
 
 # ---------------------------------------------------------------------------
@@ -624,7 +638,7 @@ def get_okx_elite_long_short_ratio(
     cache_file = _cache_path(f"elite_ls_{period}", symbol, start_date, end_date)
     cached = _load_cache(cache_file)
     if cached is not None:
-        return cached.to_csv(index=False)
+        return _compact_csv_block("OKX cached data", cached)
 
     base_params = {
         "instId": inst_id,
@@ -681,7 +695,7 @@ def get_okx_elite_long_short_ratio(
     numeric_cols = df.select_dtypes(include=["float64", "float32"]).columns
     df[numeric_cols] = df[numeric_cols].round(4)
     _save_cache(df, cache_file)
-    return df.to_csv(index=False)
+    return _compact_csv_block(f"OKX Elite Long/Short Ratio ({inst_id}, {period})", df)
 
 
 @okx_request_limiter(delay_ms=400)
@@ -719,7 +733,7 @@ def get_okx_aggregated_oi_volume(
     cache_file = _cache_path(f"agg_oi_vol_{period}", symbol, start_date, end_date)
     cached = _load_cache(cache_file)
     if cached is not None:
-        return cached.to_csv(index=False)
+        return _compact_csv_block("OKX cached data", cached)
 
     try:
         data = _okx_fetch_all(
@@ -757,7 +771,7 @@ def get_okx_aggregated_oi_volume(
     numeric_cols = df.select_dtypes(include=["float64", "float32"]).columns
     df[numeric_cols] = df[numeric_cols].round(4)
     _save_cache(df, cache_file)
-    return df.to_csv(index=False)
+    return _compact_csv_block(f"OKX Aggregated OI + Volume ({ccy}, {period})", df)
 
 
 # ---------------------------------------------------------------------------
@@ -800,7 +814,7 @@ def get_okx_put_call_ratio(
     cache_file = _cache_path(f"pc_ratio_{period}", symbol, start_date, end_date)
     cached = _load_cache(cache_file)
     if cached is not None:
-        return cached.to_csv(index=False)
+        return _compact_csv_block("OKX cached data", cached)
 
     try:
         data = _okx_fetch_all(
@@ -840,7 +854,7 @@ def get_okx_put_call_ratio(
     numeric_cols = df.select_dtypes(include=["float64", "float32"]).columns
     df[numeric_cols] = df[numeric_cols].round(4)
     _save_cache(df, cache_file)
-    return df.to_csv(index=False)
+    return _compact_csv_block(f"OKX Put/Call Ratio ({ccy}, {period})", df)
 
 
 # ---------------------------------------------------------------------------
@@ -910,35 +924,49 @@ def _to_spot_id(symbol: str) -> str:
 
 @okx_request_limiter(delay_ms=200)
 def get_okx_mark_price_candles(inst_id: str, bar: str = "1H") -> str:
-    """Fetch mark-price candles from OKX to derive perpetual vs. spot basis.
-
-    Args:
-        inst_id: Swap instId, e.g. "BTC-USDT-SWAP"
-        bar: Candle bar size: 1m, 3m, 5m, 15m, 30m, 1H, 2H, 4H, 6H, 1D
-
-    Returns:
-        Compact basis summary (mark - index price) for last 24 periods.
-    """
+    """Fetch mark-price candles and compare the latest mark to spot."""
     symbol = _resolve_okx_symbol(inst_id)
     swap_id = _to_inst_id(symbol)
+    spot_id = _to_spot_id(symbol)
     try:
-        data = _okx_request("/api/v5/market/mark-price-candles", {"instId": swap_id, "bar": bar, "limit": "24"})
+        data = _okx_request(
+            "/api/v5/market/mark-price-candles",
+            {"instId": swap_id, "bar": bar, "limit": "24"},
+        )
     except Exception as exc:
         return f"[OKX mark-price-candles] Error: {exc}"
     if not data:
         return "[OKX mark-price-candles] No data."
 
-    # data format: [ts, open, high, low, close, confirm]
+    latest_mark = None
     rows = []
-    for candle in data[:12]:  # last 12 periods
-        ts, o, h, l, c = candle[0], candle[1], candle[2], candle[3], candle[4]
+    for candle in data[:12]:
+        ts, c = candle[0], candle[4]
         try:
+            latest_mark = latest_mark or float(c)
             dt = datetime.fromtimestamp(int(ts) / 1000, tz=timezone.utc).strftime("%m-%d %H:%M")
         except Exception:
             dt = ts
         rows.append(f"  {dt}: mark_close={c}")
 
-    return f"OKX Mark Price Candles ({swap_id}, {bar}, last 12 periods):\n" + "\n".join(rows)
+    basis_line = "  Latest spot basis: unavailable"
+    try:
+        spot_data = _okx_request("/api/v5/market/ticker", {"instId": spot_id})
+        spot_last = float(spot_data[0].get("last")) if spot_data else None
+        if latest_mark is not None and spot_last:
+            basis = latest_mark - spot_last
+            basis_pct = basis / spot_last * 100
+            basis_line = (
+                f"  Latest spot basis: mark {latest_mark:g} vs spot {spot_last:g} "
+                f"= {basis:+.4f} ({basis_pct:+.3f}%)"
+            )
+    except Exception as exc:
+        basis_line = f"  Latest spot basis: unavailable ({exc})"
+
+    return (
+        f"OKX Mark Price / Spot Basis ({swap_id}, {bar}, last 12 periods):\n"
+        f"{basis_line}\n" + "\n".join(rows)
+    )
 
 
 @okx_request_limiter(delay_ms=200)
@@ -1019,16 +1047,7 @@ def get_okx_open_interest_now(inst_type: str, inst_id: str) -> str:
 
 @okx_request_limiter(delay_ms=200)
 def get_okx_liquidation_orders(inst_type: str, ccy: str) -> str:
-    """Fetch and aggregate recent liquidation orders from OKX /public/liquidation-orders.
-
-    Args:
-        inst_type: "SWAP" for perpetuals
-        ccy: Base currency, e.g. "BTC"
-
-    Returns:
-        Aggregated liquidation summary by side (long/short) and 24h bucket.
-        Shows total liquidated USD notional + largest single liquidation.
-    """
+    """Fetch and aggregate recent liquidation orders from OKX /public/liquidation-orders."""
     uly = f"{ccy.upper()}-USDT"
     try:
         data = _okx_request("/api/v5/public/liquidation-orders", {
@@ -1041,33 +1060,30 @@ def get_okx_liquidation_orders(inst_type: str, ccy: str) -> str:
     if not data:
         return f"[OKX liquidations] No recent liquidation data for {ccy}."
 
-    # Aggregate by side
-    long_liq_usd = 0.0
-    short_liq_usd = 0.0
-    largest = 0.0
+    long_contracts = 0.0
+    short_contracts = 0.0
+    largest_contracts = 0.0
     count = 0
 
     for item in data:
         details = item.get("details", [])
         for d in details:
-            side = d.get("side", "")  # "buy" = short liq; "sell" = long liq
+            side = d.get("side", "")
             sz = float(d.get("sz", 0) or 0)
-            bk_px = float(d.get("bkPx", 0) or 0)
-            notional = sz * bk_px
-            if side == "sell":  # long liquidated
-                long_liq_usd += notional
-            elif side == "buy":  # short liquidated
-                short_liq_usd += notional
-            if notional > largest:
-                largest = notional
+            if side == "sell":
+                long_contracts += sz
+            elif side == "buy":
+                short_contracts += sz
+            largest_contracts = max(largest_contracts, sz)
             count += 1
 
     return (
         f"OKX Liquidation Orders ({ccy} {inst_type}, recent filled):\n"
-        f"  Long liquidations:  ${long_liq_usd:,.0f} USD\n"
-        f"  Short liquidations: ${short_liq_usd:,.0f} USD\n"
-        f"  Largest single liq: ${largest:,.0f} USD\n"
-        f"  Total events: {count}"
+        f"  Long liquidations:  {long_contracts:,.4f} contracts\n"
+        f"  Short liquidations: {short_contracts:,.4f} contracts\n"
+        f"  Largest single liq: {largest_contracts:,.4f} contracts\n"
+        f"  Total events: {count}\n"
+        f"  Note: OKX liquidation sz is contract count; USD notional is not inferred without contract metadata."
     )
 
 
@@ -1140,17 +1156,22 @@ def get_okx_delivery_exercise(inst_type: str, ccy: str) -> str:
     Only reads the event metadata (delivery dates, settlement prices), not option greeks.
     Used to identify upcoming contract expiries as price catalysts.
     """
-    try:
-        data = _okx_request("/api/v5/public/delivery-exercise-history", {
-            "instType": inst_type,
-            "uly": f"{ccy.upper()}-USD",
-        })
-    except Exception as exc:
-        return f"[OKX delivery-exercise] Error: {exc}"
+    data = []
+    errors = []
+    for uly in (f"{ccy.upper()}-USDT", f"{ccy.upper()}-USD"):
+        try:
+            data.extend(_okx_request("/api/v5/public/delivery-exercise-history", {
+                "instType": inst_type,
+                "uly": uly,
+            }))
+        except Exception as exc:
+            errors.append(f"{uly}: {exc}")
     if not data:
+        if errors:
+            return f"[OKX delivery-exercise] Error: {'; '.join(errors)}"
         return f"[OKX delivery-exercise] No recent delivery events for {ccy}."
 
-    lines = [f"OKX Delivery/Exercise History ({ccy} {inst_type}):"]
+    lines = [f"OKX Delivery/Exercise History ({ccy} {inst_type}, USDT/USD underlyings):"]
     for item in data[:10]:
         details = item.get("details", [])
         for d in details[:3]:
@@ -1164,23 +1185,6 @@ def get_okx_delivery_exercise(inst_type: str, ccy: str) -> str:
             lines.append(f"  [{dt}] {inst_id} settled at {px}")
 
     return "\n".join(lines[:15])
-
-
-@okx_request_limiter(delay_ms=200)
-def get_okx_economic_calendar(curr_date: str, look_back_days: int = 7) -> str:
-    """Fetch crypto-related economic calendar events from OKX.
-
-    NOTE: /api/v5/public/economic-calendar requires OKX API key authentication
-    (returns 50103 without it). This function returns a placeholder so the
-    news analyst can note the data gap without raising an exception.
-    """
-    return (
-        "[OKX economic-calendar] Endpoint requires OKX API authentication "
-        "(OK-ACCESS-KEY header). No OKX API key is configured. "
-        "For macro event context, rely on CryptoPanic news feed instead."
-    )
-    # Dead code kept for reference — restore if OKX auth is added:
-    # data = _okx_request("/api/v5/public/economic-calendar", {"limit": "20"})
 
 
 # ---------------------------------------------------------------------------
@@ -1286,17 +1290,3 @@ def get_okx_margin_loan_ratio(ccy: str, period: str = "1D") -> str:
 # ---------------------------------------------------------------------------
 # PR-4 Fundamentals Extensions
 # ---------------------------------------------------------------------------
-
-@okx_request_limiter(delay_ms=200)
-def get_okx_public_borrow(ccy: str) -> str:
-    """Fetch OKX savings public borrow info for a currency.
-
-    NOTE: /api/v5/finance/savings/public-borrow-info returns 403 Forbidden
-    without authentication. This function returns a placeholder so the
-    fundamentals analyst can note the data gap without raising an exception.
-    """
-    return (
-        f"[OKX borrow] Endpoint requires OKX API authentication "
-        f"(returns 403 without OK-ACCESS-KEY). No OKX API key is configured. "
-        f"Borrow rate data for {ccy.upper()} is unavailable."
-    )

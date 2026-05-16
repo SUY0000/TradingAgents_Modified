@@ -69,18 +69,26 @@ def create_sentiment_analyst(llm):
                 buy_side_block=buy_side_block,
             )
         elif asset_type == "crypto":
+            from tradingagents.agents.utils.crypto_sentiment_tools import (
+                get_crypto_margin_leverage,
+                get_crypto_smart_money,
+            )
             from tradingagents.dataflows.alternative_me_data import get_fear_greed_block
             from tradingagents.dataflows.coingecko_data import get_coingecko_sentiment_block
             from tradingagents.dataflows.crypto_symbols import get_cg_id
             fg_block = get_fear_greed_block(end_date, look_back_days=30)
             cg_id = get_cg_id(ticker)
             votes_block = get_coingecko_sentiment_block(cg_id)
+            smart_money_block = get_crypto_smart_money.func(ticker)
+            margin_leverage_block = get_crypto_margin_leverage.func(ticker)
             system_message = _build_crypto_system_message(
                 ticker=ticker,
                 start_date=start_date,
                 end_date=end_date,
                 fg_block=fg_block,
                 votes_block=votes_block,
+                smart_money_block=smart_money_block,
+                margin_leverage_block=margin_leverage_block,
             )
         else:
             # Pre-fetch all three sources. Each fetcher degrades gracefully and
@@ -164,32 +172,39 @@ def _build_crypto_system_message(
     end_date: str,
     fg_block: str,
     votes_block: str,
+    smart_money_block: str,
+    margin_leverage_block: str,
 ) -> str:
-    """Assemble the crypto sentiment prompt with Fear & Greed + CoinGecko vote data."""
+    """Assemble the crypto sentiment prompt with four pre-fetched sentiment layers."""
     return f"""You are the crypto sentiment and reflexivity analyst for {ticker}. Your task is to read whether narratives, crowd positioning, and community attention are creating a tailwind, a liquidation-prone crowded trade, or a fading story. Crypto sentiment is reflexive: social conviction can drive flows, but crowded conviction can also become fuel for violent reversals.
 
 The evidence below covers {start_date} through {end_date} and is sourced from crypto-native sentiment data.
 
-<fear_greed_index>
+<fear_greed_index_30d>
 {fg_block}
-</fear_greed_index>
+</fear_greed_index_30d>
 
-<coingecko_community_votes>
+<platform_sentiment_votes>
 {votes_block}
-</coingecko_community_votes>
+</platform_sentiment_votes>
 
-Read the two sources together. The Fear & Greed Index captures broad market mood across the crypto space — extreme fear often coincides with capitulation bottoms; extreme greed coincides with overleveraged tops. The CoinGecko community votes and watchlist data show platform-specific attention and directional bias for this asset specifically.
+<okx_signal_trader_positioning>
+{smart_money_block}
+</okx_signal_trader_positioning>
 
-Focus on:
-- Is fear/greed extreme (below 20 or above 80)? Extreme readings often revert.
-- Is the 7d vs 30d average diverging? Short-term mood shifting relative to baseline.
-- Do platform votes align with the broader F&G reading, or do they diverge?
-- Is watchlist growth accelerating (new attention) or plateauing (mature position)?
-- What is the community size trend — Twitter/Reddit/Telegram engagement as adoption proxy?
+<okx_margin_leverage_usage>
+{margin_leverage_block}
+</okx_margin_leverage_usage>
 
-Treat missing or thin data as an analytical signal about attention, not as permission to speculate.
+Read the four layers together:
+- Macro mood: Fear & Greed captures broad crypto risk appetite; extremes often revert.
+- Platform sentiment: CoinGecko votes and community activity show asset-specific retail attention.
+- Smart money: OKX lead-trader positioning can confirm or contradict retail mood.
+- Leverage usage: OKX margin loan ratio shows whether crowd conviction is being expressed with borrowed exposure.
 
-Write a focused crypto sentiment report that separates durable narrative from hype. Explain whether sentiment is constructive, fragile, overheated, washed out, or irrelevant because liquidity/macro dominates. Close with a compact summary table covering source, direction, conviction, and the decisive narrative or positioning clue. Your report ends with that table; do not add trade recommendations, entry/exit guidance, or sizing advice.{get_language_instruction()}"""
+The strongest signal often comes from cross-layer disagreement. Greed plus bullish votes plus high leverage while smart money is short is crowded-long fragility. Fear plus weak votes while smart money is long and leverage has reset can indicate washed-out sentiment. Treat missing or thin data as an analytical signal about attention, not as permission to speculate.
+
+Write a focused crypto sentiment report that separates durable narrative from hype. Explain whether sentiment is constructive, fragile, overheated, washed out, or irrelevant because liquidity/macro dominates. Close with a compact four-layer table covering layer, direction, conviction, and the decisive narrative or positioning clue. Your report ends with that table; do not add trade recommendations, entry/exit guidance, or sizing advice.{get_language_instruction()}"""
 
 
 def _build_a_share_system_message(

@@ -1,7 +1,7 @@
 """LangChain tools for crypto news analyst.
 
-Four tools: OKX announcements, delivery events, economic calendar, and CryptoPanic news.
-These replace the generic yfinance + global_news tools for the crypto news analyst path.
+Free crypto news uses public RSS feeds; OKX tools cover exchange announcements
+and delivery events.
 """
 
 from langchain_core.tools import tool
@@ -9,26 +9,16 @@ from typing import Annotated
 
 
 @tool
-def get_crypto_news_cryptopanic(
+def get_free_crypto_news(
     currency: Annotated[str, "CCXT symbol or base currency, e.g. 'BTC/USDT', 'ETH/USDT:USDT', 'BTC'"],
     curr_date: Annotated[str, "Analysis date in yyyy-mm-dd format"],
     look_back_days: Annotated[int, "Days to look back for news (default 7)"] = 7,
     limit: Annotated[int, "Max posts to return (default 30)"] = 30,
 ) -> str:
-    """Fetch recent crypto news from CryptoPanic with community vote labels.
-
-    CryptoPanic aggregates crypto news from multiple sources and lets the
-    community vote on importance. The `important` vote count signals that
-    crypto-native traders found this price-relevant. Positive/negative votes
-    reflect directional sentiment on each headline.
-
-    Returns headlines with kind (news/media/analysis), publication date,
-    positive votes, negative votes, and important flags.
-    """
-    from tradingagents.dataflows.cryptopanic_data import get_cryptopanic_news
-    from tradingagents.dataflows.crypto_symbols import get_cp_currency
-    currency_code = get_cp_currency(currency)
-    return get_cryptopanic_news(currency_code, curr_date, look_back_days=look_back_days, limit=limit)
+    """Fetch recent crypto news from public RSS feeds without API keys."""
+    from tradingagents.dataflows.crypto_symbols import ccxt_to_base
+    from tradingagents.dataflows.free_crypto_news_data import get_free_crypto_news as fetch_news
+    return fetch_news(ccxt_to_base(currency), curr_date, look_back_days=look_back_days, limit=limit)
 
 
 @tool
@@ -63,18 +53,3 @@ def get_okx_delivery_events(
     from tradingagents.dataflows.okx_data import get_okx_delivery_exercise, _to_ccy
     ccy = _to_ccy(symbol)
     return get_okx_delivery_exercise(inst_type, ccy)
-
-
-@tool
-def get_okx_macro_calendar(
-    curr_date: Annotated[str, "Analysis date in yyyy-mm-dd format"],
-    look_back_days: Annotated[int, "Days of calendar context (default 7)"] = 7,
-) -> str:
-    """Fetch crypto-relevant macro economic calendar events from OKX.
-
-    Includes CPI, FOMC, NFP, and other macro events that historically
-    move crypto markets. High-importance events (3/3) in the next 48 hours
-    often trigger volatility regardless of direction.
-    """
-    from tradingagents.dataflows.okx_data import get_okx_economic_calendar
-    return get_okx_economic_calendar(curr_date, look_back_days=look_back_days)

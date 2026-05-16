@@ -219,9 +219,8 @@ class TradingAgentsGraph:
             from tradingagents.agents.utils.crypto_fundamental_tools import (
                 get_token_profile,
                 get_protocol_metrics,
-                get_public_borrow,
             )
-            fundamentals_tools = [get_token_profile, get_protocol_metrics, get_public_borrow]
+            fundamentals_tools = [get_token_profile, get_protocol_metrics]
         else:
             fundamentals_tools = [get_fundamentals, get_balance_sheet, get_cashflow, get_income_statement]
             if is_a_share:
@@ -234,16 +233,14 @@ class TradingAgentsGraph:
 
         if is_crypto:
             from tradingagents.agents.utils.crypto_news_tools import (
-                get_crypto_news_cryptopanic,
+                get_free_crypto_news,
                 get_okx_exchange_announcements,
                 get_okx_delivery_events,
-                get_okx_macro_calendar,
             )
             news_tools = [
-                get_crypto_news_cryptopanic,
+                get_free_crypto_news,
                 get_okx_exchange_announcements,
                 get_okx_delivery_events,
-                get_okx_macro_calendar,
             ]
         elif is_a_share:
             news_tools = [get_news, get_global_news]

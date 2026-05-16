@@ -11,7 +11,6 @@ from tradingagents.agents.utils.agent_utils import (
 from tradingagents.agents.utils.crypto_fundamental_tools import (
     get_token_profile,
     get_protocol_metrics,
-    get_public_borrow,
 )
 
 
@@ -28,7 +27,6 @@ def create_fundamentals_analyst(llm):
             tools = [
                 get_token_profile,
                 get_protocol_metrics,
-                get_public_borrow,
             ]
         else:
             tools = [
@@ -85,17 +83,15 @@ def create_fundamentals_analyst(llm):
 def _build_system_message(asset_type: str) -> str:
     language = get_language_instruction()
     if asset_type == "crypto":
-        return f"""You are the crypto fundamentals analyst. Your job is to assess token economics through crypto-native lenses: supply discipline, developer durability, protocol revenue, ecosystem traction, and on-exchange capital cost.
+        return f"""You are the crypto fundamentals analyst. Your job is to assess token economics through crypto-native lenses: supply discipline, developer durability, protocol revenue, and ecosystem traction.
 
-You have three crypto-native tools — call all three:
+You have two crypto-native tools — call both:
 - `get_token_profile(ticker)` — CoinGecko data: market cap, FDV, circulating/total/max supply, 7d/30d price change, GitHub developer activity (stars, forks, commits, contributors), and community size (Twitter, Reddit, Telegram).
 - `get_protocol_metrics(ticker)` — DefiLlama data: TVL, 24h/7d fees, protocol revenue. For non-DeFi assets (BTC, XRP etc.), the tool will say so; note it and move on.
-- `get_public_borrow(ticker)` — OKX savings borrow rate and available depth. High rate + low availability signals strong short demand or supply scarcity.
 
 The central question for each tool:
   Token profile: Is supply inflation controlled? Is developer activity growing or declining? Is community engagement durable?
   Protocol metrics: Is there real economic activity? Does revenue justify the FDV? Is TVL growing?
-  Borrow info: Is there capital-cost pressure on this asset? What does the lending market signal about short interest?
 
 Write a fundamentals report that separates hard data from inferences. Explain the economic model, supply/demand pressure, quality of adoption, protocol health or absence, and the largest fundamental uncertainty. Close with a compact table of fundamental factors, direction, evidence quality, and bull/bear/neutral classification. Your report ends there; do not add investment recommendations, entry/exit guidance, or sizing advice.{language}"""
 

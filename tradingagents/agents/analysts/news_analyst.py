@@ -8,10 +8,9 @@ from tradingagents.agents.utils.agent_utils import (
     get_news,
 )
 from tradingagents.agents.utils.crypto_news_tools import (
-    get_crypto_news_cryptopanic,
+    get_free_crypto_news,
     get_okx_exchange_announcements,
     get_okx_delivery_events,
-    get_okx_macro_calendar,
 )
 
 
@@ -23,10 +22,9 @@ def create_news_analyst(llm):
         asset_type = get_asset_type()
         if asset_type == "crypto":
             tools = [
-                get_crypto_news_cryptopanic,
+                get_free_crypto_news,
                 get_okx_exchange_announcements,
                 get_okx_delivery_events,
-                get_okx_macro_calendar,
             ]
         elif asset_type == "a_share":
             tools = [get_news, get_global_news]
@@ -73,15 +71,14 @@ def _build_system_message(asset_type: str) -> str:
     if asset_type == "crypto":
         return f"""You are the crypto news and macro catalyst analyst. Your job is to identify which headlines can change marginal flows for this crypto asset, and which headlines are noise that the market will ignore.
 
-You have four crypto-native tools:
-- `get_crypto_news_cryptopanic(currency, curr_date)` — community-voted crypto news with importance signals. Pass the base currency code (e.g. "BTC", "ETH"), not the full ticker.
+You have three free/no-key crypto-native tools:
+- `get_free_crypto_news(currency, curr_date)` — public RSS headlines from major crypto news outlets. Pass the base currency code (e.g. "BTC", "ETH"), not the full ticker.
 - `get_okx_exchange_announcements(symbol, curr_date)` — OKX listings, delistings, suspensions, and rule changes for this asset.
 - `get_okx_delivery_events(symbol)` — recent futures/options contract expiry events; major expiries are price catalysts.
-- `get_okx_macro_calendar(curr_date)` — CPI, FOMC, NFP and other macro events that move crypto markets.
 
-Call all four tools. Classify news by transmission channel: regulation/enforcement, ETF or institutional flows, protocol/security events, token supply or unlocks, exchange/liquidity conditions, stablecoin/credit stress, and macro risk appetite. A headline matters when it changes liquidity, trust, adoption, or the probability of forced positioning.
+Call all three tools. Classify news by transmission channel: regulation/enforcement, ETF or institutional flows if present in headlines, protocol/security events, token supply or unlocks, exchange/liquidity conditions, stablecoin/credit stress, and macro risk appetite if present in headlines. A headline matters when it changes liquidity, trust, adoption, or the probability of forced positioning.
 
-Write a concise news intelligence report that explains the dominant catalyst, the macro regime, pending events, and any cross-asset signal from rates, dollar, equities, commodities, or risk appetite. Close with a compact table of significant items, likely directional pressure, time horizon, and why it matters. Your report ends there; do not add trading instructions, entry/exit guidance, or sizing advice.{language}"""
+Write a concise news intelligence report that explains the dominant catalyst, pending events, and any macro or cross-asset signal explicitly present in the supplied headlines. Close with a compact table of significant items, likely directional pressure, time horizon, and why it matters. Your report ends there; do not add trading instructions, entry/exit guidance, or sizing advice.{language}"""
 
     if asset_type == "a_share":
         return f"""You are the A-share policy and news catalyst analyst. Your job is to separate headlines that can actually move this mainland China stock from generic market noise, with special attention to policy, sector regulation, industrial support, earnings events, and liquidity conditions.

@@ -1,9 +1,8 @@
 """LangChain tools for crypto fundamentals analyst.
 
-Three tools covering crypto-native fundamentals:
+Two tools covering crypto-native fundamentals:
 - Token profile (CoinGecko): supply schedule, developer activity, community
 - Protocol metrics (DefiLlama): TVL, fees, revenue for DeFi protocols
-- Public borrow info (OKX): lending rate + depth as capital cost signal
 """
 
 from langchain_core.tools import tool
@@ -50,22 +49,3 @@ def get_protocol_metrics(
     from tradingagents.dataflows.defillama_data import get_defillama_protocol
     slug = get_defillama_slug(ticker)
     return get_defillama_protocol(slug)
-
-
-@tool
-def get_public_borrow(
-    ticker: Annotated[str, "CCXT symbol or base currency, e.g. 'BTC/USDT', 'ETH/USDT:USDT', 'BTC'"],
-) -> str:
-    """Fetch OKX savings lending rate and available borrow depth for this asset.
-
-    The OKX savings pool rate reflects the cost of borrowing this asset:
-    - High borrow rate + low available amount: strong short demand or supply scarcity
-    - Low borrow rate + high available amount: borrowing demand is weak
-
-    In crypto, elevated borrow rates for an asset often coincide with short-selling
-    pressure or yield-farming demand, both of which affect price dynamics.
-    """
-    from tradingagents.dataflows.crypto_symbols import get_okx_ccy
-    from tradingagents.dataflows.okx_data import get_okx_public_borrow
-    ccy = get_okx_ccy(ticker)
-    return get_okx_public_borrow(ccy)
