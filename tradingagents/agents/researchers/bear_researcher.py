@@ -1,4 +1,7 @@
-from tradingagents.agents.utils.agent_utils import get_language_instruction
+from tradingagents.agents.utils.agent_utils import (
+    get_asset_prompt_context,
+    get_language_instruction,
+)
 
 
 def create_bear_researcher(llm):
@@ -12,8 +15,12 @@ def create_bear_researcher(llm):
         sentiment_report = state["sentiment_report"]
         news_report = state["news_report"]
         fundamentals_report = state["fundamentals_report"]
+        asset_context = get_asset_prompt_context()
 
         prompt = f"""You are the Bear Analyst on this investment team. Your role is to surface the strongest evidence-based case against the trade — not reflexive pessimism, but a rigorous argument that represents the genuine risks the bull case might underweight. The Research Manager will weigh your arguments alongside the bull case to form the investment thesis; your job is to ensure that the most critical risk factors are fully and precisely represented.
+
+## Asset Lens
+{asset_context}
 
 ## Analyst Reports
 [TECHNICAL & MARKET]

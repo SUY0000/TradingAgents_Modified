@@ -1,4 +1,7 @@
-from tradingagents.agents.utils.agent_utils import get_language_instruction
+from tradingagents.agents.utils.agent_utils import (
+    get_asset_prompt_context,
+    get_language_instruction,
+)
 
 
 def create_conservative_debator(llm):
@@ -17,8 +20,12 @@ def create_conservative_debator(llm):
 
         trader_decision = state["trader_investment_plan"]
         investment_plan = state.get("investment_plan", "")
+        asset_context = get_asset_prompt_context()
 
         prompt = f"""You are the Conservative Risk Analyst in the portfolio risk management debate. The research thesis has been established by the Research Manager and the Trader has operationalized it into a specific proposal. Your role is not to block the trade — it's to ensure that the downside parameters in the proposal adequately protect the portfolio if the thesis is wrong.
+
+## Asset Lens
+{asset_context}
 
 ## The Proposal Under Review
 {trader_decision}

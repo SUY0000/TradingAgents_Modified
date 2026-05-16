@@ -36,12 +36,56 @@ def get_language_instruction() -> str:
     return f" Write your entire response in {lang}."
 
 
+def get_asset_type() -> str:
+    from tradingagents.dataflows.config import get_config
+    vendors = get_config().get("data_vendors", {})
+    if (
+        vendors.get("core_stock_apis") == "akshare"
+        and vendors.get("technical_indicators") == "akshare"
+    ):
+        return "a_share"
+    if (
+        vendors.get("core_stock_apis") == "ccxt"
+        and vendors.get("technical_indicators") == "ccxt"
+    ):
+        return "crypto"
+    return "stock"
+
+
+def get_asset_prompt_context() -> str:
+    asset_type = get_asset_type()
+    return {
+        "stock": (
+            "Asset lens: listed equity/ETF. Judge evidence through earnings power, "
+            "valuation, sector rotation, institutional positioning, macro discount rates, "
+            "and company-specific catalysts."
+        ),
+        "a_share": (
+            "Asset lens: China mainland A-share. Judge evidence through policy tone, "
+            "sector rotation, retail attention, northbound/main-force flows, margin balance, "
+            "limit-up/down behavior, and domestic peer valuation."
+        ),
+        "crypto": (
+            "Asset lens: crypto asset. Judge evidence through liquidity, leverage, funding/OI, "
+            "token supply, protocol or adoption catalysts, regulatory headlines, macro risk appetite, "
+            "and reflexive crowd positioning."
+        ),
+    }[asset_type]
+
+
 def build_instrument_context(ticker: str) -> str:
     """Describe the exact instrument so agents preserve exchange-qualified tickers."""
+    asset_type = get_asset_type()
+    asset_context = {
+        "stock": "Treat it as a listed equity or ETF unless the reports prove otherwise.",
+        "a_share": "Treat it as a China mainland A-share with exchange suffix preserved.",
+        "crypto": "Treat it as a crypto asset: market/technical data may use the configured CCXT trading pair, while news and fundamentals use this ticker.",
+    }[asset_type]
     return (
-        f"The instrument to analyze is `{ticker}`. "
+        f"The instrument to analyze is `{ticker}`. {asset_context} "
         "Use this exact ticker in every tool call, report, and recommendation, "
-        "preserving any exchange suffix (e.g. `.TO`, `.L`, `.HK`, `.T`)."
+        "preserving any exchange suffix (e.g. `.TO`, `.L`, `.HK`, `.T`). "
+        f"{get_asset_prompt_context()}"
     )
 
 def create_msg_delete():

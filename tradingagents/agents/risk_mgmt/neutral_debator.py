@@ -1,4 +1,7 @@
-from tradingagents.agents.utils.agent_utils import get_language_instruction
+from tradingagents.agents.utils.agent_utils import (
+    get_asset_prompt_context,
+    get_language_instruction,
+)
 
 
 def create_neutral_debator(llm):
@@ -17,8 +20,12 @@ def create_neutral_debator(llm):
 
         trader_decision = state["trader_investment_plan"]
         investment_plan = state.get("investment_plan", "")
+        asset_context = get_asset_prompt_context()
 
         prompt = f"""You are the Neutral Risk Analyst in the portfolio risk management debate. The research thesis has been established by the Research Manager and the Trader has operationalized it into a specific proposal. Your role is to find the risk management structure that delivers the best risk-adjusted return — capturing as much of the opportunity as the aggressive analyst wants, with as much downside protection as the conservative analyst demands.
+
+## Asset Lens
+{asset_context}
 
 ## The Proposal Under Review
 {trader_decision}

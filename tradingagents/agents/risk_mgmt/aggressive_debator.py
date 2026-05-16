@@ -1,4 +1,7 @@
-from tradingagents.agents.utils.agent_utils import get_language_instruction
+from tradingagents.agents.utils.agent_utils import (
+    get_asset_prompt_context,
+    get_language_instruction,
+)
 
 
 def create_aggressive_debator(llm):
@@ -17,8 +20,12 @@ def create_aggressive_debator(llm):
 
         trader_decision = state["trader_investment_plan"]
         investment_plan = state.get("investment_plan", "")
+        asset_context = get_asset_prompt_context()
 
         prompt = f"""You are the Aggressive Risk Analyst in the portfolio risk management debate. The research thesis has been established by the Research Manager and the Trader has operationalized it into a specific proposal. Your role is not to re-evaluate whether the trade is right — it's to challenge risk parameters that are unnecessarily restrictive and ensure the team captures the full opportunity within the investment thesis.
+
+## Asset Lens
+{asset_context}
 
 ## The Proposal Under Review
 {trader_decision}
