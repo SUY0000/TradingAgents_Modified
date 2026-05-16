@@ -10,7 +10,7 @@ from typing import Annotated
 
 @tool
 def get_crypto_news_cryptopanic(
-    currency: Annotated[str, "Uppercase currency code, e.g. 'BTC', 'ETH'"],
+    currency: Annotated[str, "CCXT symbol or base currency, e.g. 'BTC/USDT', 'ETH/USDT:USDT', 'BTC'"],
     curr_date: Annotated[str, "Analysis date in yyyy-mm-dd format"],
     look_back_days: Annotated[int, "Days to look back for news (default 7)"] = 7,
     limit: Annotated[int, "Max posts to return (default 30)"] = 30,
@@ -27,13 +27,13 @@ def get_crypto_news_cryptopanic(
     """
     from tradingagents.dataflows.cryptopanic_data import get_cryptopanic_news
     from tradingagents.dataflows.crypto_symbols import get_cp_currency
-    currency_code = get_cp_currency(currency) if "-" in currency else currency.upper()
+    currency_code = get_cp_currency(currency)
     return get_cryptopanic_news(currency_code, curr_date, look_back_days=look_back_days, limit=limit)
 
 
 @tool
 def get_okx_exchange_announcements(
-    symbol: Annotated[str, "Crypto ticker or currency, e.g. 'BTC-USD' or 'BTC'"],
+    symbol: Annotated[str, "CCXT symbol or base currency, e.g. 'BTC/USDT', 'ETH/USDT:USDT', 'BTC'"],
     curr_date: Annotated[str, "Analysis date in yyyy-mm-dd format"],
     look_back_days: Annotated[int, "Days to scan for relevant announcements (default 14)"] = 14,
 ) -> str:
@@ -42,17 +42,15 @@ def get_okx_exchange_announcements(
     OKX announcements include: new listings, delistings, trading suspensions,
     contract specification changes, system maintenance, and rule updates.
     Exchange-level events directly affect liquidity, tradability, and price.
-
-    Pass the currency code (e.g. 'BTC') or full ticker (e.g. 'BTC-USD').
     """
     from tradingagents.dataflows.okx_data import get_okx_announcements, _to_ccy
-    ccy = _to_ccy(symbol) if ("/" in symbol or "-" in symbol) else symbol.upper()
+    ccy = _to_ccy(symbol)
     return get_okx_announcements(ccy, curr_date, look_back_days=look_back_days)
 
 
 @tool
 def get_okx_delivery_events(
-    symbol: Annotated[str, "Crypto ticker or currency, e.g. 'BTC-USD' or 'BTC'"],
+    symbol: Annotated[str, "CCXT symbol or base currency, e.g. 'BTC/USDT', 'ETH/USDT:USDT', 'BTC'"],
     inst_type: Annotated[str, "Contract type: FUTURES (default) or OPTION"] = "FUTURES",
 ) -> str:
     """Fetch recent futures delivery and options exercise events from OKX.
@@ -63,7 +61,7 @@ def get_okx_delivery_events(
     or just occurred (post-expiry positioning reset).
     """
     from tradingagents.dataflows.okx_data import get_okx_delivery_exercise, _to_ccy
-    ccy = _to_ccy(symbol) if ("/" in symbol or "-" in symbol) else symbol.upper()
+    ccy = _to_ccy(symbol)
     return get_okx_delivery_exercise(inst_type, ccy)
 
 

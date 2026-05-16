@@ -10,7 +10,7 @@ from typing import Annotated
 
 @tool
 def get_crypto_smart_money(
-    ticker: Annotated[str, "yfinance-style ticker, e.g. 'BTC-USD'"],
+    ticker: Annotated[str, "CCXT symbol or base currency, e.g. 'BTC/USDT', 'ETH/USDT:USDT', 'BTC'"],
 ) -> str:
     """Fetch OKX copy-trading lead trader positioning as a smart money signal.
 
@@ -32,7 +32,7 @@ def get_crypto_smart_money(
 
 @tool
 def get_crypto_margin_leverage(
-    ticker: Annotated[str, "yfinance-style ticker, e.g. 'BTC-USD'"],
+    ticker: Annotated[str, "CCXT symbol or base currency, e.g. 'BTC/USDT', 'ETH/USDT:USDT', 'BTC'"],
     period: Annotated[str, "Granularity: 5m, 1H, 4H, 1D (default 1D)"] = "1D",
 ) -> str:
     """Fetch OKX margin loan ratio — retail leverage usage indicator.

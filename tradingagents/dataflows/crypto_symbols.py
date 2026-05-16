@@ -1,58 +1,93 @@
-"""Ticker-to-vendor-ID mapping for crypto data sources."""
+"""Ticker-to-vendor-ID mapping for crypto data sources.
 
-# Maps yfinance ticker (BTC-USD) to vendor-specific identifiers
+All public functions accept any of these input formats:
+  - CCXT spot:    "BTC/USDT"
+  - CCXT linear:  "ETH/USDT:USDT"
+  - OKX instId:   "BTC-USDT-SWAP"
+  - Base only:    "BTC"
+
+The map is keyed by uppercase base currency so lookups work regardless
+of quote currency or suffix.
+"""
+
+# Keyed by uppercase base currency (e.g. "BTC", "ETH")
 CRYPTO_SYMBOL_MAP = {
-    "BTC-USD":  {"cg_id": "bitcoin",  "cp_currency": "BTC",  "defillama_slug": None,          "okx_ccy": "BTC"},
-    "ETH-USD":  {"cg_id": "ethereum", "cp_currency": "ETH",  "defillama_slug": "lido",         "okx_ccy": "ETH"},
-    "SOL-USD":  {"cg_id": "solana",   "cp_currency": "SOL",  "defillama_slug": None,           "okx_ccy": "SOL"},
-    "BNB-USD":  {"cg_id": "binancecoin", "cp_currency": "BNB", "defillama_slug": None,         "okx_ccy": "BNB"},
-    "XRP-USD":  {"cg_id": "ripple",   "cp_currency": "XRP",  "defillama_slug": None,           "okx_ccy": "XRP"},
-    "DOGE-USD": {"cg_id": "dogecoin", "cp_currency": "DOGE", "defillama_slug": None,           "okx_ccy": "DOGE"},
-    "ADA-USD":  {"cg_id": "cardano",  "cp_currency": "ADA",  "defillama_slug": None,           "okx_ccy": "ADA"},
-    "AVAX-USD": {"cg_id": "avalanche-2", "cp_currency": "AVAX", "defillama_slug": "avalanche", "okx_ccy": "AVAX"},
-    "UNI-USD":  {"cg_id": "uniswap",  "cp_currency": "UNI",  "defillama_slug": "uniswap-v3",   "okx_ccy": "UNI"},
-    "LINK-USD": {"cg_id": "chainlink", "cp_currency": "LINK", "defillama_slug": None,          "okx_ccy": "LINK"},
-    "LTC-USD":  {"cg_id": "litecoin", "cp_currency": "LTC",  "defillama_slug": None,           "okx_ccy": "LTC"},
-    "MATIC-USD":{"cg_id": "matic-network", "cp_currency": "MATIC", "defillama_slug": "polygon","okx_ccy": "MATIC"},
-    "DOT-USD":  {"cg_id": "polkadot", "cp_currency": "DOT",  "defillama_slug": None,           "okx_ccy": "DOT"},
-    "TRX-USD":  {"cg_id": "tron",     "cp_currency": "TRX",  "defillama_slug": None,           "okx_ccy": "TRX"},
-    "ATOM-USD": {"cg_id": "cosmos",   "cp_currency": "ATOM", "defillama_slug": None,           "okx_ccy": "ATOM"},
+    "BTC":   {"cg_id": "bitcoin",       "defillama_slug": None},
+    "ETH":   {"cg_id": "ethereum",      "defillama_slug": "lido"},
+    "SOL":   {"cg_id": "solana",        "defillama_slug": None},
+    "BNB":   {"cg_id": "binancecoin",   "defillama_slug": None},
+    "XRP":   {"cg_id": "ripple",        "defillama_slug": None},
+    "DOGE":  {"cg_id": "dogecoin",      "defillama_slug": None},
+    "ADA":   {"cg_id": "cardano",       "defillama_slug": None},
+    "AVAX":  {"cg_id": "avalanche-2",   "defillama_slug": "avalanche"},
+    "UNI":   {"cg_id": "uniswap",       "defillama_slug": "uniswap-v3"},
+    "LINK":  {"cg_id": "chainlink",     "defillama_slug": None},
+    "LTC":   {"cg_id": "litecoin",      "defillama_slug": None},
+    "MATIC": {"cg_id": "matic-network", "defillama_slug": "polygon"},
+    "DOT":   {"cg_id": "polkadot",      "defillama_slug": None},
+    "TRX":   {"cg_id": "tron",          "defillama_slug": None},
+    "ATOM":  {"cg_id": "cosmos",        "defillama_slug": None},
 }
 
 
-def _extract_base(ticker: str) -> str:
-    """Extract base symbol from yfinance ticker like 'BTC-USD' -> 'BTC'."""
-    return ticker.split("-")[0].upper()
+def ccxt_to_base(symbol: str) -> str:
+    """Extract the base currency from any CCXT/OKX symbol format.
+
+    Examples:
+        "BTC/USDT"       -> "BTC"
+        "ETH/USDT:USDT"  -> "ETH"
+        "BTC-USDT-SWAP"  -> "BTC"
+        "BTC"            -> "BTC"
+    """
+    sym = symbol.split(":")[0]                          # strip margin suffix
+    sym = sym.replace("-SWAP", "").replace("-FUTURES", "")
+    parts = sym.replace("/", "-").split("-")
+    return parts[0].upper()
 
 
-def get_cg_id(ticker: str) -> str:
-    """Return CoinGecko coin ID for the given yfinance ticker."""
-    info = CRYPTO_SYMBOL_MAP.get(ticker)
+def get_cg_id(symbol: str) -> str:
+    """Return CoinGecko coin ID for any CCXT/OKX symbol or base currency."""
+    base = ccxt_to_base(symbol)
+    info = CRYPTO_SYMBOL_MAP.get(base)
     if info:
         return info["cg_id"]
-    base = _extract_base(ticker)
     return base.lower()
 
 
-def get_cp_currency(ticker: str) -> str:
-    """Return CryptoPanic currency code for the given yfinance ticker."""
-    info = CRYPTO_SYMBOL_MAP.get(ticker)
-    if info:
-        return info["cp_currency"]
-    return _extract_base(ticker)
+def get_cp_currency(symbol: str) -> str:
+    """Return CryptoPanic currency code (uppercase base) for any CCXT/OKX symbol."""
+    return ccxt_to_base(symbol)
 
 
-def get_defillama_slug(ticker: str) -> str | None:
+def get_defillama_slug(symbol: str) -> str | None:
     """Return DefiLlama protocol slug, or None if not a DeFi protocol."""
-    info = CRYPTO_SYMBOL_MAP.get(ticker)
+    base = ccxt_to_base(symbol)
+    info = CRYPTO_SYMBOL_MAP.get(base)
     if info:
         return info.get("defillama_slug")
     return None
 
 
-def get_okx_ccy(ticker: str) -> str:
-    """Return OKX currency code for the given yfinance ticker."""
-    info = CRYPTO_SYMBOL_MAP.get(ticker)
-    if info:
-        return info["okx_ccy"]
-    return _extract_base(ticker)
+def get_okx_ccy(symbol: str) -> str:
+    """Return OKX currency code (uppercase base) for any CCXT/OKX symbol."""
+    return ccxt_to_base(symbol)
+
+
+def ccxt_to_display_ticker(ccxt_symbol: str) -> str:
+    """Derive a human-readable display ticker from a CCXT symbol.
+
+    Used as company_of_interest in graph state so reports reference
+    a stable identifier rather than the internal CCXT pair format.
+
+    Examples:
+        "BTC/USDT"       -> "BTC/USDT"
+        "ETH/USDT:USDT"  -> "ETH/USDT"  (margin suffix stripped)
+        "BTC-USDT-SWAP"  -> "BTC/USDT"   (OKX instId normalised)
+    """
+    sym = ccxt_symbol.split(":")[0]                     # strip margin suffix
+    sym = sym.replace("-SWAP", "").replace("-FUTURES", "")
+    # Normalise OKX instId dashes to CCXT slash only for BASE-QUOTE pairs
+    parts = sym.split("-")
+    if len(parts) == 2:
+        return f"{parts[0]}/{parts[1]}"
+    return sym.replace("-", "/")

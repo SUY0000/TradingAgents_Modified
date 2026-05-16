@@ -12,7 +12,7 @@ from typing import Annotated
 
 @tool
 def get_token_profile(
-    ticker: Annotated[str, "yfinance-style ticker, e.g. 'BTC-USD', 'ETH-USD', 'UNI-USD'"],
+    ticker: Annotated[str, "CCXT symbol or base currency, e.g. 'BTC/USDT', 'ETH/USDT:USDT', 'BTC'"],
 ) -> str:
     """Fetch token supply, developer activity, and community data from CoinGecko.
 
@@ -33,7 +33,7 @@ def get_token_profile(
 
 @tool
 def get_protocol_metrics(
-    ticker: Annotated[str, "yfinance-style ticker, e.g. 'UNI-USD', 'ETH-USD'"],
+    ticker: Annotated[str, "CCXT symbol or base currency, e.g. 'UNI/USDT', 'ETH/USDT:USDT', 'UNI'"],
 ) -> str:
     """Fetch DeFi protocol TVL, fees, and revenue from DefiLlama.
 
@@ -54,7 +54,7 @@ def get_protocol_metrics(
 
 @tool
 def get_public_borrow(
-    ticker: Annotated[str, "yfinance-style ticker, e.g. 'BTC-USD', 'ETH-USD'"],
+    ticker: Annotated[str, "CCXT symbol or base currency, e.g. 'BTC/USDT', 'ETH/USDT:USDT', 'BTC'"],
 ) -> str:
     """Fetch OKX savings lending rate and available borrow depth for this asset.
 

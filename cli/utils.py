@@ -554,7 +554,7 @@ def select_asset_type() -> str:
 
     Stock: all data from yfinance.
     A-Share: all data from akshare (China mainland stocks).
-    Crypto: CCXT/OKX for market data & technicals, yfinance for news & fundamentals.
+    Crypto: CCXT/OKX for all market data; CoinGecko/DefiLlama/CryptoPanic for fundamentals/news/sentiment.
     """
     choice = questionary.select(
         "Select Asset Type:",
@@ -568,7 +568,7 @@ def select_asset_type() -> str:
                 "a_share",
             ),
             questionary.Choice(
-                "Cryptocurrency  (CCXT/OKX for market & technicals, yfinance for news & fundamentals)",
+                "Cryptocurrency  (CCXT/OKX for all data — enter one CCXT pair, e.g. BTC/USDT)",
                 "crypto",
             ),
         ],

@@ -530,17 +530,8 @@ def get_user_selections():
     else:
         console.print(
             create_question_box(
-                "Step 2a: yfinance Ticker",
-                "Enter the yfinance ticker for news & fundamentals (examples: BTC-USD, ETH-USD, SOL-USD)",
-                "BTC-USD",
-            )
-        )
-        selected_ticker = get_yfinance_ticker_crypto()
-
-        console.print(
-            create_question_box(
-                "Step 2b: CCXT Trading Pair",
-                "Enter the CCXT trading pair for market data & technicals (examples: BTC/USDT, ETH/USDT, SOL/USDT)",
+                "Step 2: CCXT Trading Pair",
+                "Enter the CCXT trading pair (examples: BTC/USDT, ETH/USDT, ETH/USDT:USDT, SOL/USDT)",
                 "BTC/USDT",
             )
         )
@@ -548,6 +539,8 @@ def get_user_selections():
         console.print(
             f"[green]CCXT trading pair:[/green] {ccxt_symbol}"
         )
+        from tradingagents.dataflows.crypto_symbols import ccxt_to_display_ticker
+        selected_ticker = ccxt_to_display_ticker(ccxt_symbol)
 
     # Step 3: Analysis date
     default_date = datetime.datetime.now().strftime("%Y-%m-%d")
@@ -697,11 +690,6 @@ def get_ticker():
         raise typer.Exit(1)
 
     return (ticker.strip() or "SPY").upper()
-
-
-def get_yfinance_ticker_crypto():
-    """Get yfinance ticker for cryptocurrency (used for news & fundamentals, e.g. BTC-USD)."""
-    return typer.prompt("", default="BTC-USD")
 
 
 def get_analysis_date():
