@@ -3,6 +3,7 @@ from tradingagents.agents.utils.agent_utils import (
     build_instrument_context,
     get_asset_type,
     get_global_news,
+    get_insider_transactions,
     get_language_instruction,
     get_news,
 )
@@ -27,11 +28,10 @@ def create_news_analyst(llm):
                 get_okx_delivery_events,
                 get_okx_macro_calendar,
             ]
+        elif asset_type == "a_share":
+            tools = [get_news, get_global_news]
         else:
-            tools = [
-                get_news,
-                get_global_news,
-            ]
+            tools = [get_news, get_global_news, get_insider_transactions]
 
         system_message = _build_system_message(asset_type)
 

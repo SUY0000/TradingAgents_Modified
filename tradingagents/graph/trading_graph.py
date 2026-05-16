@@ -178,6 +178,11 @@ class TradingAgentsGraph:
                 get_crypto_elite_long_short_ratio,
                 get_crypto_aggregated_oi_volume,
                 get_crypto_put_call_ratio,
+                get_okx_ticker_snapshot,
+                get_okx_perp_basis,
+                get_okx_funding_rate_now,
+                get_okx_open_interest_now,
+                get_okx_liquidation_orders,
             )
             market_tools += [
                 get_crypto_funding_rate,
@@ -187,6 +192,11 @@ class TradingAgentsGraph:
                 get_crypto_elite_long_short_ratio,
                 get_crypto_aggregated_oi_volume,
                 get_crypto_put_call_ratio,
+                get_okx_ticker_snapshot,
+                get_okx_perp_basis,
+                get_okx_funding_rate_now,
+                get_okx_open_interest_now,
+                get_okx_liquidation_orders,
             ]
         elif is_a_share:
             from tradingagents.agents.utils.cn_market_tools import (
@@ -235,6 +245,8 @@ class TradingAgentsGraph:
                 get_okx_delivery_events,
                 get_okx_macro_calendar,
             ]
+        elif is_a_share:
+            news_tools = [get_news, get_global_news]
         else:
             news_tools = [get_news, get_global_news, get_insider_transactions]
 
