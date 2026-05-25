@@ -88,22 +88,6 @@ MODEL_OPTIONS: ProviderModeOptions = {
             ("GPT-5.5 Pro - Most capable, expensive ($30/$180 per 1M tokens)", "gpt-5.5-pro"),
         ],
     },
-    "custom_openai": {
-        "quick": [
-            ("GPT-5.4", "gpt-5.4"),
-            ("GPT-5.5 Medium", "gpt-5.5"),
-            ("GPT-5.5 High", "gpt-5.5-high"),
-            ("GPT-5.5 Xhigh", "gpt-5.5-xhigh"),
-            ("Custom model ID", "custom"),
-        ],
-        "deep": [
-            ("GPT-5.4", "gpt-5.4"),
-            ("GPT-5.5 Medium", "gpt-5.5"),
-            ("GPT-5.5 High", "gpt-5.5-high"),
-            ("GPT-5.5 Xhigh", "gpt-5.5-xhigh"),
-            ("Custom model ID", "custom"),
-        ],
-    },
     "anthropic": {
         "quick": [
             ("Claude Sonnet 4.6 - Best speed and intelligence balance", "claude-sonnet-4-6"),
@@ -115,22 +99,6 @@ MODEL_OPTIONS: ProviderModeOptions = {
             ("Claude Opus 4.6 - Frontier intelligence, agents and coding", "claude-opus-4-6"),
             ("Claude Opus 4.5 - Premium, max intelligence", "claude-opus-4-5"),
             ("Claude Sonnet 4.6 - Best speed and intelligence balance", "claude-sonnet-4-6"),
-        ],
-    },
-    "custom_anthropic": {
-        "quick": [
-            ("Claude Haiku 4.5 - Fast, near-instant responses", "claude-haiku-4-5-20251001"),
-            ("Claude Sonnet 4.6 - Best speed and intelligence balance", "claude-sonnet-4-6"),
-            ("Claude Opus 4.6 - Most intelligent, agents and coding", "claude-opus-4-6"),
-            ("Claude Opus 4.7 - Latest flagship model", "claude-opus-4-7"),
-            ("Custom model ID", "custom"),
-        ],
-        "deep": [
-            ("Claude Opus 4.7 - Latest flagship model", "claude-opus-4-7"),
-            ("Claude Opus 4.6 - Most intelligent, agents and coding", "claude-opus-4-6"),
-            ("Claude Sonnet 4.6 - Best speed and intelligence balance", "claude-sonnet-4-6"),
-            ("Claude Haiku 4.5 - Fast, near-instant responses", "claude-haiku-4-5-20251001"),
-            ("Custom model ID", "custom"),
         ],
     },
     "google": {
