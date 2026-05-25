@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 from langgraph.prebuilt import ToolNode
 
 from tradingagents.llm_clients import create_llm_client
+from tradingagents.llm_clients.headers_env import load_custom_headers
 
 from tradingagents.agents import *
 from tradingagents.default_config import DEFAULT_CONFIG
@@ -145,15 +146,32 @@ class TradingAgentsGraph:
             if thinking_level:
                 kwargs["thinking_level"] = thinking_level
 
-        elif provider == "openai":
+        elif provider in ("openai", "custom_openai"):
             reasoning_effort = self.config.get("openai_reasoning_effort")
             if reasoning_effort:
                 kwargs["reasoning_effort"] = reasoning_effort
 
-        elif provider == "anthropic":
+        elif provider in ("anthropic", "custom_anthropic"):
             effort = self.config.get("anthropic_effort")
             if effort:
                 kwargs["effort"] = effort
+
+        elif provider == "deepseek":
+            reasoning_effort = self.config.get("deepseek_reasoning_effort")
+            if reasoning_effort:
+                kwargs["reasoning_effort"] = reasoning_effort
+            thinking_enabled = self.config.get("deepseek_thinking_enabled")
+            if thinking_enabled is not None:
+                kwargs["deepseek_thinking_enabled"] = thinking_enabled
+
+        if provider == "custom_openai":
+            headers = load_custom_headers("CUSTOM_OPENAI_HEADERS")
+            if headers:
+                kwargs["default_headers"] = headers
+        elif provider == "custom_anthropic":
+            headers = load_custom_headers("CUSTOM_ANTHROPIC_HEADERS")
+            if headers:
+                kwargs["default_headers"] = headers
 
         return kwargs
 

@@ -80,6 +80,15 @@ class DeepSeekChatOpenAI(NormalizedChatOpenAI):
     ``NormalizedChatOpenAI.with_structured_output``, not here.
     """
 
+    def __init__(self, *args, deepseek_thinking_enabled=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if deepseek_thinking_enabled is True:
+            self._thinking_mode = "enabled"
+        elif deepseek_thinking_enabled is False:
+            self._thinking_mode = "disabled"
+        else:
+            self._thinking_mode = None
+
     def _get_request_payload(self, input_, *, stop=None, **kwargs):
         payload = super()._get_request_payload(input_, stop=stop, **kwargs)
         outgoing = payload.get("messages", [])
@@ -89,6 +98,9 @@ class DeepSeekChatOpenAI(NormalizedChatOpenAI):
             reasoning = message.additional_kwargs.get("reasoning_content")
             if reasoning is not None:
                 message_dict["reasoning_content"] = reasoning
+        if self._thinking_mode is not None:
+            extra = payload.setdefault("extra_body", {})
+            extra["thinking"] = {"type": self._thinking_mode}
         return payload
 
     def _create_chat_result(self, response, generation_info=None):
@@ -134,6 +146,7 @@ class MinimaxChatOpenAI(NormalizedChatOpenAI):
 _PASSTHROUGH_KWARGS = (
     "timeout", "max_retries", "reasoning_effort",
     "api_key", "callbacks", "http_client", "http_async_client",
+    "default_headers",
 )
 
 # Provider base URLs. API-key env vars live in api_key_env.PROVIDER_API_KEY_ENV
@@ -229,6 +242,8 @@ class OpenAIClient(BaseLLMClient):
         # Provider-specific quirks live in their own subclasses so the
         # base NormalizedChatOpenAI stays free of provider branches.
         if self.provider == "deepseek":
+            if "deepseek_thinking_enabled" in self.kwargs:
+                llm_kwargs["deepseek_thinking_enabled"] = self.kwargs["deepseek_thinking_enabled"]
             chat_cls = DeepSeekChatOpenAI
         elif self.provider in ("minimax", "minimax-cn"):
             chat_cls = MinimaxChatOpenAI
