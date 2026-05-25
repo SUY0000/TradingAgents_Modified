@@ -24,7 +24,6 @@ from tradingagents.graph.trading_graph import TradingAgentsGraph
 from tradingagents.default_config import DEFAULT_CONFIG
 from cli.models import AnalystType
 from cli.utils import *
-from cli.announcements import fetch_announcements, display_announcements
 from cli.stats_handler import StatsCallbackHandler
 
 console = Console()
@@ -253,9 +252,12 @@ def update_display(layout, spinner_text=None, stats_handler=None, start_time=Non
     # Header with welcome message
     layout["header"].update(
         Panel(
-            "[bold green]Welcome to TradingAgents CLI[/bold green]\n"
-            "[dim]© [Tauric Research](https://github.com/TauricResearch)[/dim]",
-            title="Welcome to TradingAgents",
+            "[bold green]Welcome to TradingAgents-Modified CLI[/bold green]\n"
+            "[dim]Upstream: [link=https://github.com/TauricResearch/TradingAgents]"
+            "github.com/TauricResearch/TradingAgents[/link]"
+            "  ·  This fork: [link=https://github.com/SUY0000/TradingAgents_Modified]"
+            "github.com/SUY0000/TradingAgents_Modified[/link][/dim]",
+            title="TradingAgents-Modified",
             border_style="green",
             padding=(1, 2),
             expand=True,
@@ -464,11 +466,14 @@ def get_user_selections():
 
     # Create welcome box content
     welcome_content = f"{welcome_ascii}\n"
-    welcome_content += "[bold green]TradingAgents: Multi-Agents LLM Financial Trading Framework - CLI[/bold green]\n\n"
+    welcome_content += "[bold green]TradingAgents-Modified: Multi-Agents LLM Financial Trading Framework - CLI[/bold green]\n\n"
     welcome_content += "[bold]Workflow Steps:[/bold]\n"
     welcome_content += "I. Analyst Team → II. Research Team → III. Trader → IV. Risk Management → V. Portfolio Management\n\n"
     welcome_content += (
-        "[dim]Built by [Tauric Research](https://github.com/TauricResearch)[/dim]"
+        "[dim]Upstream: [link=https://github.com/TauricResearch/TradingAgents]"
+        "github.com/TauricResearch/TradingAgents[/link]"
+        "  ·  This fork: [link=https://github.com/SUY0000/TradingAgents_Modified]"
+        "github.com/SUY0000/TradingAgents_Modified[/link][/dim]"
     )
 
     # Create and center the welcome box
@@ -476,16 +481,11 @@ def get_user_selections():
         welcome_content,
         border_style="green",
         padding=(1, 2),
-        title="Welcome to TradingAgents",
-        subtitle="Multi-Agents LLM Financial Trading Framework",
+        title="Welcome to TradingAgents-Modified",
+        subtitle="Community Fork · Multi-Agents LLM Financial Trading Framework",
     )
     console.print(Align.center(welcome_box))
     console.print()
-    console.print()  # Add vertical space before announcements
-
-    # Fetch and display announcements (silent on failure)
-    announcements = fetch_announcements()
-    display_announcements(console, announcements)
 
     # Create a boxed questionnaire for each step
     def create_question_box(title, prompt, default=None):
