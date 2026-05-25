@@ -8,6 +8,8 @@ from rich.console import Console
 
 from cli.models import AnalystType
 from tradingagents.llm_clients.api_key_env import get_api_key_env
+from tradingagents.llm_clients.custom_model_discovery import FetchError, fetch_custom_models
+from tradingagents.llm_clients.headers_env import load_custom_headers
 from tradingagents.llm_clients.model_catalog import get_model_options
 
 console = Console()
@@ -186,6 +188,52 @@ def _prompt_custom_model_id() -> str:
     ).ask().strip()
 
 
+_custom_provider_model_cache: dict[str, list[str]] = {}
+
+
+def select_custom_provider_model(provider: str, mode: str) -> str:
+    """Select a model for custom_openai or custom_anthropic via /models endpoint."""
+    models = _custom_provider_model_cache.get(provider)
+    if models is None:
+        base_url_env = (
+            "CUSTOM_OPENAI_BASE_URL" if provider == "custom_openai"
+            else "CUSTOM_ANTHROPIC_BASE_URL"
+        )
+        headers_env = (
+            "CUSTOM_OPENAI_HEADERS" if provider == "custom_openai"
+            else "CUSTOM_ANTHROPIC_HEADERS"
+        )
+        base_url = os.getenv(base_url_env, "").strip()
+        api_key = get_custom_llm_api_key(provider) or ""
+        extra_headers = load_custom_headers(headers_env)
+        if base_url:
+            try:
+                models = fetch_custom_models(provider, base_url, api_key, extra_headers)
+                _custom_provider_model_cache[provider] = models
+            except FetchError as e:
+                console.print(f"\n[yellow]Could not fetch models from {provider}: {e}[/yellow]")
+                models = []
+
+    if models:
+        choices = [questionary.Choice(m, value=m) for m in models]
+        choices.append(questionary.Choice("Custom model ID (manual entry)", value="__custom__"))
+        choice = questionary.select(
+            f"Select {provider} model [{mode}-thinking]:",
+            choices=choices,
+            instruction="\n- Use arrow keys to navigate\n- Press Enter to select",
+            style=questionary.Style([
+                ("selected", "fg:magenta noinherit"),
+                ("highlighted", "fg:magenta noinherit"),
+                ("pointer", "fg:magenta noinherit"),
+            ]),
+        ).ask()
+        if choice is None or choice == "__custom__":
+            return _prompt_custom_model_id()
+        return choice
+
+    return _prompt_custom_model_id()
+
+
 def _get_required_env(name: str) -> str:
     value = os.getenv(name, "").strip()
     if not value:
@@ -208,6 +256,9 @@ def _select_model(provider: str, mode: str) -> str:
     provider_lower = provider.lower()
     if provider_lower == "openrouter":
         return select_openrouter_model()
+
+    if provider_lower in ("custom_openai", "custom_anthropic"):
+        return select_custom_provider_model(provider_lower, mode)
 
     if provider_lower == "azure":
         return questionary.text(
@@ -302,16 +353,52 @@ def select_llm_provider() -> tuple[str, str | None]:
     return provider, url
 
 
-def ask_openai_reasoning_effort() -> str:
-    """Ask for OpenAI reasoning effort level."""
-    choices = [
-        questionary.Choice("Medium (Default)", "medium"),
-        questionary.Choice("High (More thorough)", "high"),
-        questionary.Choice("Low (Faster)", "low"),
-    ]
+_EFFORT_CHOICES = [
+    questionary.Choice("Default (do not send effort)", None),
+    questionary.Choice("Low", "low"),
+    questionary.Choice("Medium", "medium"),
+    questionary.Choice("High (recommended)", "high"),
+    questionary.Choice("XHigh", "xhigh"),
+    questionary.Choice("Max", "max"),
+]
+
+_EFFORT_STYLE = questionary.Style([
+    ("selected", "fg:cyan noinherit"),
+    ("highlighted", "fg:cyan noinherit"),
+    ("pointer", "fg:cyan noinherit"),
+])
+
+
+def ask_openai_reasoning_effort() -> str | None:
+    """Ask for OpenAI / custom_openai reasoning effort level."""
     return questionary.select(
         "Select Reasoning Effort:",
-        choices=choices,
+        choices=_EFFORT_CHOICES,
+        default="high",
+        style=_EFFORT_STYLE,
+    ).ask()
+
+
+def ask_anthropic_effort() -> str | None:
+    """Ask for Anthropic / custom_anthropic effort level."""
+    return questionary.select(
+        "Select Effort Level:",
+        choices=_EFFORT_CHOICES,
+        default="high",
+        style=_EFFORT_STYLE,
+    ).ask()
+
+
+def ask_deepseek_reasoning_effort() -> str | None:
+    """Ask for DeepSeek reasoning effort level."""
+    return questionary.select(
+        "Select DeepSeek Reasoning Effort:",
+        choices=[
+            questionary.Choice("Default (do not send)", None),
+            questionary.Choice("High (recommended)", "high"),
+            questionary.Choice("Max", "max"),
+        ],
+        default="high",
         style=questionary.Style([
             ("selected", "fg:cyan noinherit"),
             ("highlighted", "fg:cyan noinherit"),
@@ -320,20 +407,16 @@ def ask_openai_reasoning_effort() -> str:
     ).ask()
 
 
-def ask_anthropic_effort() -> str | None:
-    """Ask for Anthropic effort level.
-
-    Controls token usage and response thoroughness on Claude 4.5 / 4.6 / 4.7
-    models. The API also accepts "max"; we expose low/medium/high as the
-    common selection range.
-    """
+def ask_deepseek_thinking() -> bool | None:
+    """Ask whether to enable DeepSeek chain-of-thought thinking."""
     return questionary.select(
-        "Select Effort Level:",
+        "Select DeepSeek Thinking Mode:",
         choices=[
-            questionary.Choice("High (recommended)", "high"),
-            questionary.Choice("Medium (balanced)", "medium"),
-            questionary.Choice("Low (faster, cheaper)", "low"),
+            questionary.Choice("Auto (V4 default: enabled)", None),
+            questionary.Choice("Enabled — activate chain-of-thought", True),
+            questionary.Choice("Disabled — non-think direct output", False),
         ],
+        default=None,
         style=questionary.Style([
             ("selected", "fg:cyan noinherit"),
             ("highlighted", "fg:cyan noinherit"),

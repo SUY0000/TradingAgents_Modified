@@ -622,6 +622,8 @@ def get_user_selections():
     thinking_level = None
     reasoning_effort = None
     anthropic_effort = None
+    deepseek_effort = None
+    deepseek_thinking = None
 
     provider_lower = selected_llm_provider.lower()
     if provider_lower == "google":
@@ -632,22 +634,31 @@ def get_user_selections():
             )
         )
         thinking_level = ask_gemini_thinking_config()
-    elif provider_lower == "openai":
+    elif provider_lower in ("openai", "custom_openai"):
         console.print(
             create_question_box(
                 "Step 9: Reasoning Effort",
-                "Configure OpenAI reasoning effort level"
+                "Configure reasoning effort level"
             )
         )
         reasoning_effort = ask_openai_reasoning_effort()
-    elif provider_lower == "anthropic":
+    elif provider_lower in ("anthropic", "custom_anthropic"):
         console.print(
             create_question_box(
                 "Step 9: Effort Level",
-                "Configure Claude effort level"
+                "Configure effort level"
             )
         )
         anthropic_effort = ask_anthropic_effort()
+    elif provider_lower == "deepseek":
+        console.print(
+            create_question_box(
+                "Step 9: DeepSeek Reasoning Configuration",
+                "Configure DeepSeek reasoning effort and thinking mode"
+            )
+        )
+        deepseek_effort = ask_deepseek_reasoning_effort()
+        deepseek_thinking = ask_deepseek_thinking()
 
     llm_provider = selected_llm_provider.lower()
     return {
@@ -665,6 +676,8 @@ def get_user_selections():
         "google_thinking_level": thinking_level,
         "openai_reasoning_effort": reasoning_effort,
         "anthropic_effort": anthropic_effort,
+        "deepseek_reasoning_effort": deepseek_effort,
+        "deepseek_thinking_enabled": deepseek_thinking,
         "output_language": output_language,
     }
 
@@ -1018,6 +1031,8 @@ def run_analysis(checkpoint: bool = False):
     config["google_thinking_level"] = selections.get("google_thinking_level")
     config["openai_reasoning_effort"] = selections.get("openai_reasoning_effort")
     config["anthropic_effort"] = selections.get("anthropic_effort")
+    config["deepseek_reasoning_effort"] = selections.get("deepseek_reasoning_effort")
+    config["deepseek_thinking_enabled"] = selections.get("deepseek_thinking_enabled")
     config["output_language"] = selections.get("output_language", "English")
     config["checkpoint_enabled"] = checkpoint
 
