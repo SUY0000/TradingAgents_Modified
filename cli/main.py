@@ -618,47 +618,65 @@ def get_user_selections():
     selected_shallow_thinker = select_shallow_thinking_agent(selected_llm_provider)
     selected_deep_thinker = select_deep_thinking_agent(selected_llm_provider)
 
-    # Step 9: Provider-specific thinking configuration
-    thinking_level = None
-    reasoning_effort = None
-    anthropic_effort = None
-    deepseek_effort = None
-    deepseek_thinking = None
+    # Step 9: Provider-specific thinking configuration (separate for quick and deep models)
+    quick_thinking_level = None
+    deep_thinking_level = None
+    quick_reasoning_effort = None
+    deep_reasoning_effort = None
+    quick_anthropic_effort = None
+    deep_anthropic_effort = None
+    quick_deepseek_effort = None
+    deep_deepseek_effort = None
+    quick_deepseek_thinking = None
+    deep_deepseek_thinking = None
 
     provider_lower = selected_llm_provider.lower()
     if provider_lower == "google":
         console.print(
             create_question_box(
                 "Step 9: Thinking Mode",
-                "Configure Gemini thinking mode"
+                "Configure Gemini thinking mode for Quick and Deep models"
             )
         )
-        thinking_level = ask_gemini_thinking_config()
+        console.print("[bold]Quick model:[/bold]")
+        quick_thinking_level = ask_gemini_thinking_config()
+        console.print("[bold]Deep model:[/bold]")
+        deep_thinking_level = ask_gemini_thinking_config()
     elif provider_lower in ("openai", "custom_openai"):
         console.print(
             create_question_box(
                 "Step 9: Reasoning Effort",
-                "Configure reasoning effort level"
+                "Configure reasoning effort for Quick and Deep models"
             )
         )
-        reasoning_effort = ask_openai_reasoning_effort()
+        console.print("[bold]Quick model:[/bold]")
+        quick_reasoning_effort = ask_openai_reasoning_effort()
+        console.print("[bold]Deep model:[/bold]")
+        deep_reasoning_effort = ask_openai_reasoning_effort()
     elif provider_lower in ("anthropic", "custom_anthropic"):
         console.print(
             create_question_box(
                 "Step 9: Effort Level",
-                "Configure effort level"
+                "Configure effort level for Quick and Deep models"
             )
         )
-        anthropic_effort = ask_anthropic_effort()
+        console.print("[bold]Quick model:[/bold]")
+        quick_anthropic_effort = ask_anthropic_effort()
+        console.print("[bold]Deep model:[/bold]")
+        deep_anthropic_effort = ask_anthropic_effort()
     elif provider_lower == "deepseek":
         console.print(
             create_question_box(
                 "Step 9: DeepSeek Reasoning Configuration",
-                "Configure DeepSeek reasoning effort and thinking mode"
+                "Configure DeepSeek reasoning effort and thinking mode for Quick and Deep models"
             )
         )
-        deepseek_effort = ask_deepseek_reasoning_effort()
-        deepseek_thinking = ask_deepseek_thinking()
+        console.print("[bold]Quick model:[/bold]")
+        quick_deepseek_effort = ask_deepseek_reasoning_effort()
+        quick_deepseek_thinking = ask_deepseek_thinking()
+        console.print("[bold]Deep model:[/bold]")
+        deep_deepseek_effort = ask_deepseek_reasoning_effort()
+        deep_deepseek_thinking = ask_deepseek_thinking()
 
     llm_provider = selected_llm_provider.lower()
     return {
@@ -673,11 +691,16 @@ def get_user_selections():
         "llm_api_key": get_custom_llm_api_key(llm_provider),
         "shallow_thinker": selected_shallow_thinker,
         "deep_thinker": selected_deep_thinker,
-        "google_thinking_level": thinking_level,
-        "openai_reasoning_effort": reasoning_effort,
-        "anthropic_effort": anthropic_effort,
-        "deepseek_reasoning_effort": deepseek_effort,
-        "deepseek_thinking_enabled": deepseek_thinking,
+        "quick_google_thinking_level": quick_thinking_level,
+        "deep_google_thinking_level": deep_thinking_level,
+        "quick_openai_reasoning_effort": quick_reasoning_effort,
+        "deep_openai_reasoning_effort": deep_reasoning_effort,
+        "quick_anthropic_effort": quick_anthropic_effort,
+        "deep_anthropic_effort": deep_anthropic_effort,
+        "quick_deepseek_reasoning_effort": quick_deepseek_effort,
+        "deep_deepseek_reasoning_effort": deep_deepseek_effort,
+        "quick_deepseek_thinking_enabled": quick_deepseek_thinking,
+        "deep_deepseek_thinking_enabled": deep_deepseek_thinking,
         "output_language": output_language,
     }
 
@@ -1027,12 +1050,17 @@ def run_analysis(checkpoint: bool = False):
     config["backend_url"] = selections["backend_url"]
     config["llm_provider"] = selections["llm_provider"].lower()
     config["llm_api_key"] = selections.get("llm_api_key")
-    # Provider-specific thinking configuration
-    config["google_thinking_level"] = selections.get("google_thinking_level")
-    config["openai_reasoning_effort"] = selections.get("openai_reasoning_effort")
-    config["anthropic_effort"] = selections.get("anthropic_effort")
-    config["deepseek_reasoning_effort"] = selections.get("deepseek_reasoning_effort")
-    config["deepseek_thinking_enabled"] = selections.get("deepseek_thinking_enabled")
+    # Provider-specific thinking configuration (separate for quick and deep models)
+    config["quick_google_thinking_level"] = selections.get("quick_google_thinking_level")
+    config["deep_google_thinking_level"] = selections.get("deep_google_thinking_level")
+    config["quick_openai_reasoning_effort"] = selections.get("quick_openai_reasoning_effort")
+    config["deep_openai_reasoning_effort"] = selections.get("deep_openai_reasoning_effort")
+    config["quick_anthropic_effort"] = selections.get("quick_anthropic_effort")
+    config["deep_anthropic_effort"] = selections.get("deep_anthropic_effort")
+    config["quick_deepseek_reasoning_effort"] = selections.get("quick_deepseek_reasoning_effort")
+    config["deep_deepseek_reasoning_effort"] = selections.get("deep_deepseek_reasoning_effort")
+    config["quick_deepseek_thinking_enabled"] = selections.get("quick_deepseek_thinking_enabled")
+    config["deep_deepseek_thinking_enabled"] = selections.get("deep_deepseek_thinking_enabled")
     config["output_language"] = selections.get("output_language", "English")
     config["checkpoint_enabled"] = checkpoint
 

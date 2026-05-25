@@ -17,8 +17,10 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_MAX_RISK_ROUNDS":      "max_risk_discuss_rounds",
     "TRADINGAGENTS_CHECKPOINT_ENABLED":   "checkpoint_enabled",
     "TRADINGAGENTS_BENCHMARK_TICKER":     "benchmark_ticker",
-    "TRADINGAGENTS_DEEPSEEK_REASONING_EFFORT": "deepseek_reasoning_effort",
-    "TRADINGAGENTS_DEEPSEEK_THINKING_ENABLED":  "deepseek_thinking_enabled",
+    "TRADINGAGENTS_QUICK_DEEPSEEK_REASONING_EFFORT": "quick_deepseek_reasoning_effort",
+    "TRADINGAGENTS_DEEP_DEEPSEEK_REASONING_EFFORT":  "deep_deepseek_reasoning_effort",
+    "TRADINGAGENTS_QUICK_DEEPSEEK_THINKING_ENABLED": "quick_deepseek_thinking_enabled",
+    "TRADINGAGENTS_DEEP_DEEPSEEK_THINKING_ENABLED":  "deep_deepseek_thinking_enabled",
 }
 
 
@@ -35,7 +37,7 @@ def _coerce(value: str, reference):
 
 def _apply_env_overrides(config: dict) -> dict:
     """Apply TRADINGAGENTS_* env vars to the config dict in-place."""
-    _BOOL_KEYS = {"deepseek_thinking_enabled"}
+    _BOOL_KEYS = {"quick_deepseek_thinking_enabled", "deep_deepseek_thinking_enabled"}
     for env_var, key in _ENV_OVERRIDES.items():
         raw = os.environ.get(env_var)
         if raw is None or raw == "":
@@ -66,12 +68,17 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # provider-specific URL here would leak (e.g. OpenAI's /v1 was previously
     # being forwarded to Gemini, producing malformed request URLs).
     "backend_url": None,
-    # Provider-specific thinking configuration
-    "google_thinking_level": None,      # "high", "minimal", etc.
-    "openai_reasoning_effort": None,    # "medium", "high", "low"
-    "anthropic_effort": None,           # "high", "medium", "low"
-    "deepseek_reasoning_effort": None,  # None | "high" | "max"
-    "deepseek_thinking_enabled": None,  # None | True | False
+    # Provider-specific thinking configuration (separate for quick and deep models)
+    "quick_google_thinking_level": None,      # "high", "minimal", etc.
+    "deep_google_thinking_level": None,
+    "quick_openai_reasoning_effort": None,    # "medium", "high", "low"
+    "deep_openai_reasoning_effort": None,
+    "quick_anthropic_effort": None,           # "high", "medium", "low"
+    "deep_anthropic_effort": None,
+    "quick_deepseek_reasoning_effort": None,  # None | "high" | "max"
+    "deep_deepseek_reasoning_effort": None,
+    "quick_deepseek_thinking_enabled": None,  # None | True | False
+    "deep_deepseek_thinking_enabled": None,
     # Checkpoint/resume: when True, LangGraph saves state after each node
     # so a crashed run can resume from the last successful step.
     "checkpoint_enabled": False,
