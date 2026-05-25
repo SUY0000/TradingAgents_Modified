@@ -17,6 +17,8 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_MAX_RISK_ROUNDS":      "max_risk_discuss_rounds",
     "TRADINGAGENTS_CHECKPOINT_ENABLED":   "checkpoint_enabled",
     "TRADINGAGENTS_BENCHMARK_TICKER":     "benchmark_ticker",
+    "TRADINGAGENTS_DEEPSEEK_REASONING_EFFORT": "deepseek_reasoning_effort",
+    "TRADINGAGENTS_DEEPSEEK_THINKING_ENABLED":  "deepseek_thinking_enabled",
 }
 
 
@@ -33,11 +35,15 @@ def _coerce(value: str, reference):
 
 def _apply_env_overrides(config: dict) -> dict:
     """Apply TRADINGAGENTS_* env vars to the config dict in-place."""
+    _BOOL_KEYS = {"deepseek_thinking_enabled"}
     for env_var, key in _ENV_OVERRIDES.items():
         raw = os.environ.get(env_var)
         if raw is None or raw == "":
             continue
-        config[key] = _coerce(raw, config.get(key))
+        if key in _BOOL_KEYS:
+            config[key] = raw.strip().lower() in ("true", "1", "yes", "on")
+        else:
+            config[key] = _coerce(raw, config.get(key))
     return config
 
 
@@ -64,6 +70,8 @@ DEFAULT_CONFIG = _apply_env_overrides({
     "google_thinking_level": None,      # "high", "minimal", etc.
     "openai_reasoning_effort": None,    # "medium", "high", "low"
     "anthropic_effort": None,           # "high", "medium", "low"
+    "deepseek_reasoning_effort": None,  # None | "high" | "max"
+    "deepseek_thinking_enabled": None,  # None | True | False
     # Checkpoint/resume: when True, LangGraph saves state after each node
     # so a crashed run can resume from the last successful step.
     "checkpoint_enabled": False,
