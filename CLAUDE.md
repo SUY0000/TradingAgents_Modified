@@ -171,6 +171,11 @@ ENV:
 
 - OpenAI-compatible providers include OpenAI, custom_openai, xAI, DeepSeek, Qwen/Qwen-CN, GLM/GLM-CN, MiniMax/MiniMax-CN, Ollama, OpenRouter.
 - `custom_openai` uses `CUSTOM_OPENAI_BASE_URL` / `CUSTOM_OPENAI_API_KEY`; `custom_anthropic` uses `CUSTOM_ANTHROPIC_BASE_URL` / `CUSTOM_ANTHROPIC_API_KEY`.
+- `CUSTOM_OPENAI_HEADERS` / `CUSTOM_ANTHROPIC_HEADERS` are JSON object strings parsed by `headers_env.load_custom_headers()` and forwarded as LangChain `default_headers`.
+- Custom provider model selection bypasses `model_catalog.py`; `cli/utils.select_custom_provider_model()` fetches `{CUSTOM_*_BASE_URL}/models` and falls back to manual entry.
+- `custom_model_discovery.fetch_custom_models()` must tolerate `{"data": [...]}`, `{"models": [...]}`, top-level `[...]`, and empty `{"data": []}` responses.
+- OpenAI/Anthropic effort menus share Default/Low/Medium/High/XHigh/Max with High as CLI default; select Default when a backend rejects effort fields.
+- DeepSeek supports `deepseek_reasoning_effort` and `deepseek_thinking_enabled`; thinking mode is injected through `extra_body.thinking` in `DeepSeekChatOpenAI`.
 - CLI interactive selection helpers live mostly in `cli/utils.py`; simple prompt wrappers and run assembly live in `cli/main.py`.
 - Adding CLI steps requires manual step-number renumbering in `cli/main.py`.
 
@@ -186,4 +191,5 @@ ENV:
 - When adding analyst tools, update both `llm.bind_tools(tools)` and `TradingAgentsGraph._create_tool_nodes()` unless the agent is intentionally no-ToolNode like Sentiment.
 - When an OKX endpoint turns out to require auth, prefer a graceful stub (placeholder string) over removing the function — leaves the door open for HMAC-signed wiring later. Document the stub at the function docstring AND in this file's OKX section.
 - Use `git diff --check` before committing prompt/doc rewrites.
+- After editing custom provider headers or model discovery, run `python -m pytest tests/test_headers_env.py tests/test_custom_model_discovery.py -v`.
 - Commit only explicit source/doc files; leave `.DS_Store`, `plan/`, and build-worktree `reports/` untracked unless the user explicitly asks otherwise.
