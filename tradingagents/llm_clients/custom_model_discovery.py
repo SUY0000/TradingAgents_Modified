@@ -41,8 +41,17 @@ def fetch_custom_models(
     except ValueError as exc:
         raise FetchError(f"Invalid JSON from {url}: {exc}") from exc
 
-    # Support both {"data": [...]} and {"models": [...]} shapes
-    items = body.get("data") or body.get("models")
+    if isinstance(body, list):
+        items = body
+    elif isinstance(body, dict):
+        items = body.get("data")
+        if items is None:
+            items = body.get("models")
+    else:
+        raise FetchError(
+            f"Unexpected response shape from {url}: expected object or list"
+        )
+
     if not isinstance(items, list):
         raise FetchError(
             f"Unexpected response shape from {url}: "
