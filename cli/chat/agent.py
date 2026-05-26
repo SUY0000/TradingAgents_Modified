@@ -30,10 +30,18 @@ def _build_chat_kwargs(config: dict) -> dict:
     provider = config.get("chat_llm_provider", "openai").lower()
     effort = config.get("chat_llm_effort", "default")
     api_key = config.get("llm_api_key")
+
+    if not api_key:
+        from tradingagents.llm_clients.api_key_env import get_api_key_env
+        env_var = get_api_key_env(provider)
+        if env_var:
+            api_key = os.environ.get(env_var)
+
     if provider == "custom_openai":
         api_key = os.environ.get("CUSTOM_OPENAI_API_KEY") or api_key
     elif provider == "custom_anthropic":
         api_key = os.environ.get("CUSTOM_ANTHROPIC_API_KEY") or api_key
+
     if api_key:
         kwargs["api_key"] = api_key
 
