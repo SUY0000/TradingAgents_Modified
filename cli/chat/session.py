@@ -50,26 +50,34 @@ def load_messages(session_path: Path) -> list:
             if d.get("type") == "msg":
                 raw_msgs.append(d)
 
-    # Integrity check: if the last AIMessage has tool_calls but no following ToolMessages,
-    # discard that AIMessage and the user message that preceded it.
     messages = [jsonl_to_msg(d) for d in raw_msgs]
-    messages = _repair_incomplete_tool_calls(messages)
-    return messages
+    return _repair_incomplete_tool_calls(messages)
 
 
 def _repair_incomplete_tool_calls(messages: list) -> list:
-    """Drop trailing AIMessage+preceding user message if tool_calls are unresolved."""
-    if not messages:
-        return messages
-    last = messages[-1]
-    if isinstance(last, AIMessage) and getattr(last, "tool_calls", None):
-        # Find the user message that immediately precedes this AIMessage
-        tail = messages[:-1]
-        while tail and isinstance(tail[-1], (AIMessage, ToolMessage)):
-            tail = tail[:-1]
-        if tail and isinstance(tail[-1], HumanMessage):
-            tail = tail[:-1]
-        return tail
+    """Drop the trailing user turn if its tool_calls are missing tool results."""
+    for ai_idx in range(len(messages) - 1, -1, -1):
+        ai_msg = messages[ai_idx]
+        if not isinstance(ai_msg, AIMessage) or not getattr(ai_msg, "tool_calls", None):
+            continue
+
+        expected_ids = {tc.get("id") for tc in ai_msg.tool_calls if tc.get("id")}
+        following = messages[ai_idx + 1:]
+        actual_ids = {
+            msg.tool_call_id
+            for msg in following
+            if isinstance(msg, ToolMessage) and getattr(msg, "tool_call_id", None)
+        }
+        if expected_ids and expected_ids.issubset(actual_ids):
+            return messages
+
+        cut_idx = ai_idx
+        for idx in range(ai_idx - 1, -1, -1):
+            if isinstance(messages[idx], HumanMessage):
+                cut_idx = idx
+                break
+        return messages[:cut_idx]
+
     return messages
 
 
