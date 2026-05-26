@@ -1382,7 +1382,7 @@ def chat(
     )
     from cli.chat.browser import pick_report
     from cli.chat.llm_setup import setup_chat_llm_interactive
-    from cli.chat.session import default_session_path, ensure_session
+    from cli.chat.session import default_session_path, ensure_session, latest_session_path, make_session_path
     from cli.chat.agent import build_chat_llm, build_chat_app, load_past_context, rebuild_app_graph
     from cli.chat.repl import run_repl
 
@@ -1431,8 +1431,10 @@ def chat(
     app_graph = build_chat_app(
         manifest, reports_bundle, past_context, llm, toolkit, working_config, today
     )
-    session_path = default_session_path(report_dir)
-    ensure_session(session_path, manifest)
+    session_path = latest_session_path(report_dir)
+    if session_path is None:
+        session_path = make_session_path(report_dir, "default")
+        ensure_session(session_path, manifest, title="default")
 
     report_ticker = manifest.get("ticker", "?")
     report_date = manifest.get("analysis_date", "?")
@@ -1447,7 +1449,14 @@ def chat(
     def _rebuild(cfg):
         return rebuild_app_graph(manifest, reports_bundle, past_context, cfg, today)
 
-    run_repl(app_graph, session_path, manifest, working_config, rebuild_fn=_rebuild)
+    run_repl(
+        app_graph,
+        session_path,
+        manifest,
+        working_config,
+        rebuild_fn=_rebuild,
+        report_dir=report_dir,
+    )
 
 
 if __name__ == "__main__":

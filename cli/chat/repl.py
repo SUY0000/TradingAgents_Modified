@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.rule import Rule
+from rich.table import Table
 
 from cli.chat.session import append_message, load_messages, msg_to_jsonl, truncate_last_message
 
@@ -113,23 +114,32 @@ def _handle_slash(
     rebuild_fn,
     app_graph_ref: list,
     manifest: dict,
+    session_path_ref: list,
+    state_messages: list,
+    report_dir: Path,
 ) -> str:
     """Dispatch a slash command.
 
     Returns one of: "continue", "break", "unknown".
     """
-    parts = user_input.split(None, 1)
+    parts = user_input.strip().split(None, 1)
     cmd = parts[0].lower()
     arg = parts[1].strip() if len(parts) > 1 else ""
 
     if cmd == "/help":
-        console.print(
-            "[bold cyan]/help[/bold cyan]            Show this help.\n"
-            "[bold cyan]/lang [LANG][/bold cyan]     Switch output language "
-            "(e.g. /lang zh, /lang en). Prompts if omitted.\n"
-            "[bold cyan]/model[/bold cyan]           Re-select chat LLM provider, model, and effort.\n"
-            "[bold cyan]/exit, /quit[/bold cyan]     Exit the chat."
-        )
+        t = Table(show_header=False, show_lines=False, box=None, padding=(0, 2))
+        t.add_column("cmd", style="bold cyan", no_wrap=True)
+        t.add_column("desc")
+        t.add_row("/help", "Show this help.")
+        t.add_row("/tools", "List currently bound chat tools.")
+        t.add_row("/lang [LANG]", "Switch output language (e.g. /lang zh, /lang en).")
+        t.add_row("/model", "Re-select chat LLM provider, model, and effort.")
+        t.add_row("/sessions", "Switch to another session in this report.")
+        t.add_row("/new [title]", "Create a new session (optional title).")
+        t.add_row("/title <name>", "Rename the current session.")
+        t.add_row("/delete", "Delete the current session.")
+        t.add_row("/exit, /quit", "Exit the chat.")
+        console.print(t)
         return "continue"
 
     if cmd == "/lang":
@@ -165,7 +175,7 @@ def _handle_slash(
             console.print("[yellow]Hot-swap unavailable in this session.[/yellow]")
             return "continue"
         from cli.chat.llm_setup import setup_chat_llm_interactive
-        setup_chat_llm_interactive(config)
+        setup_chat_llm_interactive(config, force_interactive=True)
         try:
             app_graph_ref[0] = rebuild_fn(config)
             new_model = config.get("chat_llm_model", "?")
@@ -177,6 +187,102 @@ def _handle_slash(
             console.print(f"[red]Failed to rebuild graph: {exc}[/red]")
         return "continue"
 
+    if cmd == "/tools":
+        from cli.chat.agent import get_chat_tools
+        tools = get_chat_tools(config)
+        t = Table(title=f"Available tools ({len(tools)})", show_lines=False)
+        t.add_column("Name", style="cyan", no_wrap=True)
+        t.add_column("Description")
+        for tool in tools:
+            desc = (tool.description or "").strip().split("\n")[0][:120]
+            t.add_row(tool.name, desc)
+        console.print(t)
+        return "continue"
+
+    if cmd == "/sessions":
+        from cli.chat.session import list_sessions
+        sessions = list_sessions(report_dir)
+        if not sessions:
+            console.print("[yellow]No sessions found.[/yellow]")
+            return "continue"
+        current = session_path_ref[0]
+        try:
+            import questionary
+        except ImportError:
+            console.print("[yellow]questionary not installed.[/yellow]")
+            return "continue"
+        choices = []
+        mapping = {}
+        for s in sessions:
+            marker = "★ " if s["path"] == current else "  "
+            label = f"{marker}{s['title']:<30}  ({s['n_msgs']} msgs)  {s['created_at']}"
+            choices.append(label)
+            mapping[label] = s["path"]
+        selected = questionary.select("Switch to session:", choices=choices).ask()
+        if selected is None:
+            return "continue"
+        new_path = mapping[selected]
+        if new_path == current:
+            return "continue"
+        session_path_ref[0] = new_path
+        state_messages.clear()
+        state_messages.extend(load_messages(new_path))
+        console.print(f"[green]Switched to session:[/green] {new_path.name} ({len(state_messages)} msgs loaded)")
+        return "continue"
+
+    if cmd == "/new":
+        from cli.chat.session import make_session_path, ensure_session
+        title = arg or "untitled"
+        new_path = make_session_path(report_dir, title)
+        ensure_session(new_path, manifest, title=title)
+        session_path_ref[0] = new_path
+        state_messages.clear()
+        console.print(f"[green]New session created:[/green] {new_path.name}")
+        return "continue"
+
+    if cmd == "/title":
+        if not arg:
+            console.print("[yellow]Usage: /title <new-name>[/yellow]")
+            return "continue"
+        from cli.chat.session import rename_session_file, rewrite_header
+        new_path = rename_session_file(session_path_ref[0], arg)
+        rewrite_header(new_path, title=arg)
+        session_path_ref[0] = new_path
+        console.print(f"[green]Session renamed to:[/green] {new_path.name}")
+        return "continue"
+
+    if cmd == "/delete":
+        try:
+            import questionary
+        except ImportError:
+            console.print("[yellow]questionary not installed.[/yellow]")
+            return "continue"
+        from cli.chat.session import (
+            delete_session, list_sessions, latest_session_path,
+            make_session_path, ensure_session,
+        )
+        confirmed = questionary.confirm(
+            f"Delete session {session_path_ref[0].name}? This cannot be undone.",
+            default=False,
+        ).ask()
+        if not confirmed:
+            console.print("[dim]Cancelled.[/dim]")
+            return "continue"
+        delete_session(session_path_ref[0])
+        remaining = list_sessions(report_dir)
+        if remaining:
+            new_path = remaining[0]["path"]
+            state_messages.clear()
+            state_messages.extend(load_messages(new_path))
+            console.print(f"[green]Switched to:[/green] {new_path.name}")
+        else:
+            new_path = make_session_path(report_dir, "untitled")
+            ensure_session(new_path, manifest, title="untitled")
+            state_messages.clear()
+            console.print(f"[green]All sessions deleted. Created:[/green] {new_path.name}")
+        session_path_ref[0] = new_path
+        return "continue"
+
     return "unknown"
 
 
@@ -186,6 +292,7 @@ def run_repl(
     manifest: dict,
     config: dict,
     rebuild_fn=None,
+    report_dir: Path | None = None,
 ) -> None:
     """Main REPL loop."""
     try:
@@ -195,7 +302,8 @@ def run_repl(
         return
 
     state_messages = load_messages(session_path)
-    _print_header(manifest, session_path, config, len(state_messages))
+    session_path_ref = [session_path]
+    _print_header(manifest, session_path_ref[0], config, len(state_messages))
 
     if state_messages:
         console.print(f"[dim]已加载 {len(state_messages)} 条历史消息[/dim]")
@@ -204,8 +312,6 @@ def run_repl(
     console.print(Rule(style="dim"))
 
     app_graph_ref = [app_graph]
-    model = config.get("chat_llm_model", "")
-    effort = config.get("chat_llm_effort", "")
     pt_session = PromptSession()
     first_interrupt_at = None
 
@@ -234,7 +340,16 @@ def run_repl(
             break
 
         if user_input_stripped.startswith("/"):
-            action = _handle_slash(user_input_stripped, config, rebuild_fn, app_graph_ref, manifest)
+            action = _handle_slash(
+                user_input_stripped,
+                config,
+                rebuild_fn,
+                app_graph_ref,
+                manifest,
+                session_path_ref,
+                state_messages,
+                report_dir,
+            )
             if action == "break":
                 break
             if action == "unknown":
@@ -244,7 +359,7 @@ def run_repl(
         # Append user message
         user_msg = HumanMessage(content=user_input)
         state_messages.append(user_msg)
-        append_message(session_path, msg_to_jsonl(user_msg))
+        append_message(session_path_ref[0], msg_to_jsonl(user_msg))
 
         # Invoke agent
         console.print()
@@ -254,21 +369,21 @@ def run_repl(
             console.print("[yellow]\n已中断[/yellow]")
             # Remove the user message we just appended since we got no response
             state_messages.pop()
-            truncate_last_message(session_path)
+            truncate_last_message(session_path_ref[0])
             continue
         except Exception as exc:
             console.print(f"[red]响应失败: {exc}[/red]")
             state_messages.pop()
-            truncate_last_message(session_path)
+            truncate_last_message(session_path_ref[0])
             continue
 
         # Persist new messages
         for m in new_msgs:
             state_messages.append(m)
             if isinstance(m, AIMessage):
-                append_message(session_path, msg_to_jsonl(m, model=model, effort=effort))
+                append_message(session_path_ref[0], msg_to_jsonl(m, model=config.get("chat_llm_model", ""), effort=config.get("chat_llm_effort", "")))
             else:
-                append_message(session_path, msg_to_jsonl(m))
+                append_message(session_path_ref[0], msg_to_jsonl(m))
 
         console.print()
 

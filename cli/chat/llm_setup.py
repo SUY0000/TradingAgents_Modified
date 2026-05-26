@@ -27,7 +27,7 @@ def _env_key_for_provider(provider: str) -> str | None:
     return None  # ollama / unknown — no key needed
 
 
-def setup_chat_llm_interactive(config: dict) -> dict:
+def setup_chat_llm_interactive(config: dict, force_interactive: bool = False) -> dict:
     """Walk the user through provider/model/effort/key selection for chat.
 
     Mutates `config` in place AND returns it, populating:
@@ -64,7 +64,7 @@ def setup_chat_llm_interactive(config: dict) -> dict:
     key = _env_key_for_provider(provider)
 
     # Fast path: key already available (or provider needs no key, e.g. ollama)
-    if key is not None or provider == "ollama":
+    if not force_interactive and (key is not None or provider == "ollama"):
         effort_display = effort if effort and effort != "default" else "default"
         console.print(
             f"[dim]Using configured chat LLM: {provider}/{model} "

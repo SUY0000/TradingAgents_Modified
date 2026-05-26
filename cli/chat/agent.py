@@ -155,3 +155,13 @@ def rebuild_app_graph(
     llm = build_chat_llm(config)
     toolkit = Toolkit(config)
     return build_chat_app(manifest, reports_bundle, past_context, llm, toolkit, config, today)
+
+
+def get_chat_tools(config: dict) -> list:
+    """Return the bound chat tools for the current asset type.
+
+    Used by REPL slash commands (e.g. /tools) that need to inspect tools
+    without owning the compiled graph. Recomputes from config each call;
+    cheap because Toolkit() is just a thin wrapper around config.
+    """
+    return get_all_tools_for_asset_type(Toolkit(config), config)

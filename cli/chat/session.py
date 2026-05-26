@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import os
+import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,7 +15,118 @@ def default_session_path(report_dir: Path) -> Path:
     return Path(report_dir) / "sessions" / "default.jsonl"
 
 
-def ensure_session(session_path: Path, manifest: dict) -> None:
+_TS_FORMAT = "%Y%m%d-%H%M%S"
+_TS_PREFIX_LEN = 15   # "YYYYMMDD-HHMMSS"
+
+
+def _ts_slug() -> str:
+    return datetime.now().strftime(_TS_FORMAT)
+
+
+def _sanitize_title(title: str) -> str:
+    """Lowercase, non-alnum/underscore → '-', trim ≤40 chars, fallback 'untitled'."""
+    s = (title or "").strip().lower()
+    s = re.sub(r"[^a-z0-9_]+", "-", s).strip("-")
+    s = s[:40]
+    return s or "untitled"
+
+
+def make_session_path(report_dir: Path, title: str = "default") -> Path:
+    """Return a fresh session jsonl path under {report_dir}/sessions/."""
+    return Path(report_dir) / "sessions" / f"{_ts_slug()}-{_sanitize_title(title)}.jsonl"
+
+
+def list_sessions(report_dir: Path) -> list[dict]:
+    """Scan {report_dir}/sessions/*.jsonl, parse header line, return sorted by mtime desc.
+
+    Each item: {"path": Path, "id": str, "title": str, "created_at": str, "mtime": float, "n_msgs": int}
+    Files whose first line fails JSON parse are silently skipped.
+    """
+    sessions_dir = Path(report_dir) / "sessions"
+    if not sessions_dir.exists():
+        return []
+    out = []
+    for p in sessions_dir.glob("*.jsonl"):
+        try:
+            with open(p, encoding="utf-8") as f:
+                first = f.readline().strip()
+                if not first:
+                    continue
+                header = json.loads(first)
+                # Count msg lines (excluding header)
+                n_msgs = 0
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        try:
+                            d = json.loads(line)
+                            if d.get("type") == "msg":
+                                n_msgs += 1
+                        except json.JSONDecodeError:
+                            pass
+            if header.get("type") != "header":
+                continue
+            out.append({
+                "path": p,
+                "id": header.get("id", ""),
+                "title": header.get("title", p.stem),
+                "created_at": header.get("created_at", ""),
+                "mtime": p.stat().st_mtime,
+                "n_msgs": n_msgs,
+            })
+        except (OSError, json.JSONDecodeError):
+            continue
+    out.sort(key=lambda x: x["mtime"], reverse=True)
+    return out
+
+
+def latest_session_path(report_dir: Path) -> Path | None:
+    sessions = list_sessions(report_dir)
+    return sessions[0]["path"] if sessions else None
+
+
+def rewrite_header(session_path: Path, **updates) -> None:
+    """Atomically rewrite the JSONL header line with merged updates."""
+    session_path = Path(session_path)
+    lines = session_path.read_text(encoding="utf-8").splitlines()
+    if not lines:
+        return
+    header = json.loads(lines[0])
+    header.update(updates)
+    lines[0] = json.dumps(header, ensure_ascii=False)
+    tmp = session_path.with_suffix(session_path.suffix + ".tmp")
+    tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    os.replace(tmp, session_path)
+
+
+def rename_session_file(session_path: Path, new_title: str) -> Path:
+    """Rename the jsonl file, preserving the timestamp prefix if present.
+
+    If the existing filename has a valid YYYYMMDD-HHMMSS prefix, keep it.
+    Otherwise prepend a fresh _ts_slug() prefix.
+    Returns the new path. File is moved on disk via os.replace.
+    """
+    session_path = Path(session_path)
+    stem = session_path.stem
+    prefix = stem[:_TS_PREFIX_LEN]
+    try:
+        datetime.strptime(prefix, _TS_FORMAT)
+        ts = prefix
+    except ValueError:
+        ts = _ts_slug()
+    new_name = f"{ts}-{_sanitize_title(new_title)}.jsonl"
+    new_path = session_path.parent / new_name
+    if new_path == session_path:
+        return session_path
+    os.replace(session_path, new_path)
+    return new_path
+
+
+def delete_session(session_path: Path) -> None:
+    Path(session_path).unlink(missing_ok=True)
+
+
+def ensure_session(session_path: Path, manifest: dict, title: str = "default") -> None:
     """Create the session file with a header line if it does not exist."""
     session_path = Path(session_path)
     if session_path.exists():
@@ -26,7 +139,7 @@ def ensure_session(session_path: Path, manifest: dict) -> None:
         "type": "header",
         "schema_version": 1,
         "id": str(uuid.uuid4()),
-        "title": "default",
+        "title": title,
         "created_at": datetime.now(tz=timezone.utc).isoformat(),
         "report_ref": f"{ticker_safe}/{date}",
     }
