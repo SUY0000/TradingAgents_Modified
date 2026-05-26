@@ -1,4 +1,5 @@
 from typing import Optional
+import copy
 import datetime
 import typer
 import questionary
@@ -25,7 +26,7 @@ from tradingagents.default_config import DEFAULT_CONFIG
 from cli.models import AnalystType
 from cli.utils import *
 from cli.stats_handler import StatsCallbackHandler
-from cli.chat.manifest import write_run_manifest
+from cli.chat.manifest import safe_ticker, write_run_manifest
 
 console = Console()
 
@@ -1043,7 +1044,7 @@ def run_analysis(checkpoint: bool = False):
     selections = get_user_selections()
 
     # Create config with selected research depth
-    config = DEFAULT_CONFIG.copy()
+    config = copy.deepcopy(DEFAULT_CONFIG)
     config["max_debate_rounds"] = selections["research_depth"]
     config["max_risk_discuss_rounds"] = selections["research_depth"]
     config["quick_think_llm"] = selections["shallow_thinker"]
@@ -1103,7 +1104,7 @@ def run_analysis(checkpoint: bool = False):
     start_time = time.time()
 
     # Create result directory
-    results_dir = Path(config["results_dir"]) / selections["ticker"] / selections["analysis_date"]
+    results_dir = Path(config["results_dir"]) / safe_ticker(selections["ticker"]) / selections["analysis_date"]
     results_dir.mkdir(parents=True, exist_ok=True)
     report_dir = results_dir / "reports"
     report_dir.mkdir(parents=True, exist_ok=True)

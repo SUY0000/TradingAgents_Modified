@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime
+import os
 from pathlib import Path
 
 from langchain_core.messages import SystemMessage
@@ -27,8 +28,12 @@ def _build_chat_kwargs(config: dict) -> dict:
     """
     kwargs = {}
     provider = config.get("chat_llm_provider", "openai").lower()
-    effort = config.get("chat_llm_effort", "high")
+    effort = config.get("chat_llm_effort", "default")
     api_key = config.get("llm_api_key")
+    if provider == "custom_openai":
+        api_key = os.environ.get("CUSTOM_OPENAI_API_KEY") or api_key
+    elif provider == "custom_anthropic":
+        api_key = os.environ.get("CUSTOM_ANTHROPIC_API_KEY") or api_key
     if api_key:
         kwargs["api_key"] = api_key
 
@@ -70,7 +75,12 @@ def build_chat_llm(config: dict):
     """Construct the chat LLM from config['chat_llm_*'] triple."""
     provider = config.get("chat_llm_provider", "openai")
     model = config.get("chat_llm_model", "gpt-4o")
+    provider_lower = provider.lower()
     base_url = config.get("backend_url")
+    if provider_lower == "custom_openai":
+        base_url = os.environ.get("CUSTOM_OPENAI_BASE_URL") or base_url
+    elif provider_lower == "custom_anthropic":
+        base_url = os.environ.get("CUSTOM_ANTHROPIC_BASE_URL") or base_url
     kwargs = _build_chat_kwargs(config)
     client = create_llm_client(provider=provider, model=model, base_url=base_url, **kwargs)
     return client.get_llm()

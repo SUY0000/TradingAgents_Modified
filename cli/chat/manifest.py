@@ -13,16 +13,20 @@ from pathlib import Path
 
 def safe_ticker(ticker: str) -> str:
     """把 ticker 中不适合作文件名的字符替换为下划线（BTC/USDT → BTC_USDT）。"""
+    parts = Path(ticker).parts
+    if Path(ticker).is_absolute() or any(part in {"", ".", ".."} for part in parts):
+        raise ValueError(f"Invalid ticker path component: {ticker}")
     return ticker.replace("/", "_").replace("\\", "_").replace(":", "_")
 
 
 def find_report_dir(results_dir: Path, ticker: str, date: str) -> Path:
-    """返回 {results_dir}/{ticker}/{date}/。
-
-    ticker 按 Path 原样拼接（保留 '/' 从而匹配现有目录结构，如 BTC/USDT 对应 BTC/USDT/）。
-    如不存在，抛 FileNotFoundError。
-    """
-    path = Path(results_dir) / ticker / date
+    """返回 {results_dir}/{safe_ticker(ticker)}/{date}/。如不存在，抛 FileNotFoundError。"""
+    try:
+        ticker_dir = safe_ticker(ticker)
+        datetime.strptime(date, "%Y-%m-%d")
+    except ValueError as exc:
+        raise FileNotFoundError(str(exc)) from exc
+    path = Path(results_dir) / ticker_dir / date
     if not path.exists():
         raise FileNotFoundError(
             f"Report directory not found: {path}\n"

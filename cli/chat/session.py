@@ -79,6 +79,16 @@ def append_message(session_path: Path, msg: dict) -> None:
         f.write(json.dumps(msg, ensure_ascii=False) + "\n")
 
 
+def truncate_last_message(session_path: Path) -> None:
+    """Remove the last persisted message row while preserving the session header."""
+    session_path = Path(session_path)
+    lines = session_path.read_text(encoding="utf-8").splitlines()
+    if len(lines) <= 1:
+        return
+    lines = lines[:-1]
+    session_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 # ── LangChain ↔ JSONL conversion ────────────────────────────────────────────
 
 def msg_to_jsonl(message, model: str = "", effort: str = "") -> dict:

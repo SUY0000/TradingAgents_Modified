@@ -10,7 +10,7 @@ from rich.markdown import Markdown
 from rich.panel import Panel
 from rich.rule import Rule
 
-from cli.chat.session import append_message, load_messages, msg_to_jsonl
+from cli.chat.session import append_message, load_messages, msg_to_jsonl, truncate_last_message
 
 console = Console()
 
@@ -56,8 +56,10 @@ def stream_invoke(app_graph, state_messages: list, config: dict) -> list:
 
     except KeyboardInterrupt:
         raise
-    except Exception:
-        # Fallback to invoke
+    except Exception as exc:
+        if new_messages:
+            raise
+        console.print(f"[yellow]stream failed, falling back to invoke: {exc}[/yellow]")
         result = app_graph.invoke({"messages": state_messages})
         for msg in result.get("messages", [])[len(state_messages):]:
             if isinstance(msg, AIMessage):
@@ -169,6 +171,12 @@ def run_repl(
             console.print("[yellow]\n已中断[/yellow]")
             # Remove the user message we just appended since we got no response
             state_messages.pop()
+            truncate_last_message(session_path)
+            continue
+        except Exception as exc:
+            console.print(f"[red]响应失败: {exc}[/red]")
+            state_messages.pop()
+            truncate_last_message(session_path)
             continue
 
         # Persist new messages

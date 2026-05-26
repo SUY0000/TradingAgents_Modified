@@ -74,7 +74,7 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # Chat sub-command LLM settings
     "chat_llm_provider": "openai",
     "chat_llm_model":    "gpt-4o",
-    "chat_llm_effort":   "high",
+    "chat_llm_effort":   "default",
     # Provider-specific thinking configuration (separate for quick and deep models)
     "quick_google_thinking_level": None,      # "high", "minimal", etc.
     "deep_google_thinking_level": None,
