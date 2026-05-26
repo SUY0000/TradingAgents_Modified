@@ -1321,8 +1321,9 @@ def run_analysis(checkpoint: bool = False):
             final_state=final_state,
         )
         console.print(
-            f"[dim]💬 运行 `tradingagents chat --ticker {selections['ticker']} "
-            f"--date {selections['analysis_date']}` 与 agent 复盘讨论本次报告[/dim]"
+            f"[dim]💬 启动 `tradingagents chat` 选择本次报告与 agent 复盘[/dim]\n"
+            f"[dim]   或直接运行 `tradingagents chat --ticker {selections['ticker']} "
+            f"--date {selections['analysis_date']}`[/dim]"
         )
     except Exception as _e:
         console.print(f"[dim]manifest write skipped: {_e}[/dim]")
@@ -1375,58 +1376,84 @@ def analyze(
 
 @app.command()
 def chat(
-    ticker: str = typer.Option(..., "--ticker", "-t", help="标的（与运行分析时一致）"),
-    date: str = typer.Option(..., "--date", "-d", help="报告日期 YYYY-MM-DD"),
+    ticker: Optional[str] = typer.Option(None, "--ticker", "-t",
+        help="标的（可选，未提供时进入浏览器）"),
+    date: Optional[str] = typer.Option(None, "--date", "-d",
+        help="报告日期 YYYY-MM-DD（可选）"),
 ):
     """对历史报告进行回溯对话。"""
     import datetime as _dt
+    import copy
     from tradingagents.default_config import DEFAULT_CONFIG
     from tradingagents.dataflows.config import set_config
     from tradingagents.agents.utils.agent_utils import Toolkit
     from cli.chat.manifest import (
         find_report_dir, load_manifest, load_reports, apply_manifest_to_config,
     )
+    from cli.chat.browser import pick_report
+    from cli.chat.llm_setup import setup_chat_llm_interactive
     from cli.chat.session import default_session_path, ensure_session
     from cli.chat.agent import build_chat_llm, build_chat_app, load_past_context
     from cli.chat.repl import run_repl
 
-    import copy
     config = copy.deepcopy(DEFAULT_CONFIG)
 
-    try:
-        report_dir = find_report_dir(Path(config["results_dir"]), ticker, date)
-    except FileNotFoundError as e:
-        console.print(f"[red]{e}[/red]")
-        raise typer.Exit(1)
+    # 1. 定位 report_dir
+    if ticker and date:
+        try:
+            report_dir = find_report_dir(Path(config["results_dir"]), ticker, date)
+        except FileNotFoundError as e:
+            console.print(f"[red]{e}[/red]")
+            raise typer.Exit(1)
+    elif ticker or date:
+        console.print("[red]--ticker 与 --date 需同时提供[/red]")
+        raise typer.Exit(2)
+    else:
+        report_dir = pick_report(Path(config["results_dir"]))
+        if report_dir is None:
+            console.print("[yellow]已取消[/yellow]")
+            raise typer.Exit(0)
 
+    # 2. 加载 manifest + reports
     try:
         manifest = load_manifest(report_dir)
     except FileNotFoundError as e:
         console.print(f"[red]{e}[/red]")
         raise typer.Exit(1)
-
     reports_bundle = load_reports(report_dir, manifest)
     working_config = apply_manifest_to_config(config, manifest)
-
-    # Apply manifest config to global singleton so tools route correctly
     set_config(working_config)
 
+    # 3. 交互式补齐 LLM 配置 + key
+    working_config = setup_chat_llm_interactive(working_config)
+
+    # 4. 构造 LLM + graph + 进 REPL
     try:
         llm = build_chat_llm(working_config)
     except Exception as e:
         console.print(f"[red]Failed to build chat LLM: {e}[/red]")
         raise typer.Exit(1)
-
     toolkit = Toolkit(working_config)
-    past_context = load_past_context(manifest.get("company_of_interest", ticker), working_config)
+    past_context = load_past_context(
+        manifest.get("company_of_interest", manifest["ticker"]), working_config
+    )
     today = _dt.date.today()
-
     app_graph = build_chat_app(
         manifest, reports_bundle, past_context, llm, toolkit, working_config, today
     )
-
     session_path = default_session_path(report_dir)
     ensure_session(session_path, manifest)
+
+    report_ticker = manifest.get("ticker", "?")
+    report_date = manifest.get("analysis_date", "?")
+    report_asset = manifest.get("asset_type", "?")
+    chat_provider = working_config.get("chat_llm_provider", "openai")
+    chat_model = working_config.get("chat_llm_model", "gpt-4o")
+    console.print(
+        f"[dim]Loaded report {report_ticker} {report_date} ({report_asset}) "
+        f"· {chat_provider}/{chat_model}[/dim]"
+    )
+
     run_repl(app_graph, session_path, manifest, working_config)
 
 
