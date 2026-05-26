@@ -341,9 +341,10 @@ def run_repl(
 
     if state_messages:
         console.print(f"[dim]已加载 {len(state_messages)} 条历史消息[/dim]")
+        _print_history(state_messages)
     else:
         console.print("[dim]新 session 已创建。输入问题开始复盘讨论。[/dim]")
-    console.print(Rule(style="dim"))
+        console.print(Rule(style="dim"))
 
     app_graph_ref = [app_graph]
     pt_session = PromptSession()
