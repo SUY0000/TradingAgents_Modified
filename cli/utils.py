@@ -354,7 +354,7 @@ def select_llm_provider() -> tuple[str, str | None]:
 
 
 _EFFORT_CHOICES = [
-    questionary.Choice("Default (do not send effort)", None),
+    questionary.Choice("Default (do not send effort)", ""),
     questionary.Choice("Low", "low"),
     questionary.Choice("Medium", "medium"),
     questionary.Choice("High (recommended)", "high"),
@@ -394,7 +394,7 @@ def ask_deepseek_reasoning_effort() -> str | None:
     return questionary.select(
         "Select DeepSeek Reasoning Effort:",
         choices=[
-            questionary.Choice("Default (do not send)", None),
+            questionary.Choice("Default (do not send)", ""),
             questionary.Choice("High (recommended)", "high"),
             questionary.Choice("Max", "max"),
         ],
@@ -407,16 +407,16 @@ def ask_deepseek_reasoning_effort() -> str | None:
     ).ask()
 
 
-def ask_deepseek_thinking() -> bool | None:
+def ask_deepseek_thinking() -> bool | str:
     """Ask whether to enable DeepSeek chain-of-thought thinking."""
     return questionary.select(
         "Select DeepSeek Thinking Mode:",
         choices=[
-            questionary.Choice("Auto (V4 default: enabled)", None),
+            questionary.Choice("Auto (V4 default: enabled)", ""),
             questionary.Choice("Enabled — activate chain-of-thought", True),
             questionary.Choice("Disabled — non-think direct output", False),
         ],
-        default=None,
+        default="",
         style=questionary.Style([
             ("selected", "fg:cyan noinherit"),
             ("highlighted", "fg:cyan noinherit"),

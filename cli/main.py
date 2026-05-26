@@ -674,11 +674,11 @@ def get_user_selections():
             )
         )
         console.print("[bold]Quick model:[/bold]")
-        quick_deepseek_effort = ask_deepseek_reasoning_effort()
         quick_deepseek_thinking = ask_deepseek_thinking()
+        quick_deepseek_effort = ask_deepseek_reasoning_effort()
         console.print("[bold]Deep model:[/bold]")
-        deep_deepseek_effort = ask_deepseek_reasoning_effort()
         deep_deepseek_thinking = ask_deepseek_thinking()
+        deep_deepseek_effort = ask_deepseek_reasoning_effort()
 
     llm_provider = selected_llm_provider.lower()
     return {

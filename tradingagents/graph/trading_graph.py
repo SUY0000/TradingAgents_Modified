@@ -169,7 +169,7 @@ class TradingAgentsGraph:
             if reasoning_effort:
                 kwargs["reasoning_effort"] = reasoning_effort
             thinking_enabled = self.config.get(f"{prefix}deepseek_thinking_enabled")
-            if thinking_enabled is not None:
+            if thinking_enabled is not None and thinking_enabled != "":
                 kwargs["deepseek_thinking_enabled"] = thinking_enabled
 
         if provider == "custom_openai":
