@@ -25,6 +25,7 @@ from tradingagents.default_config import DEFAULT_CONFIG
 from cli.models import AnalystType
 from cli.utils import *
 from cli.stats_handler import StatsCallbackHandler
+from cli.chat.manifest import write_run_manifest
 
 console = Console()
 
@@ -1308,6 +1309,22 @@ def run_analysis(checkpoint: bool = False):
                 message_buffer.update_report_section(section, final_state[section])
 
         update_display(layout, stats_handler=stats_handler, start_time=start_time)
+
+    # Auto-save report + manifest to results_dir (always, independent of user prompt)
+    try:
+        save_report_to_disk(final_state, selections["ticker"], results_dir)
+        write_run_manifest(
+            save_path=results_dir,
+            selections=selections,
+            config=config,
+            final_state=final_state,
+        )
+        console.print(
+            f"[dim]💬 运行 `tradingagents chat --ticker {selections['ticker']} "
+            f"--date {selections['analysis_date']}` 与 agent 复盘讨论本次报告[/dim]"
+        )
+    except Exception as _e:
+        console.print(f"[dim]manifest write skipped: {_e}[/dim]")
 
     # Post-analysis prompts (outside Live context for clean interaction)
     console.print("\n[bold cyan]Analysis Complete![/bold cyan]\n")
