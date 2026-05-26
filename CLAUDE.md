@@ -185,9 +185,21 @@ ENV:
 - `TradingMemoryLog` stores final decisions and resolves outcomes on later same-ticker runs.
 - Reflection alpha uses `_resolve_benchmark()` and labels alpha as `Alpha vs <benchmark>`.
 
+## Chat Replay (`tradingagents chat`)
+
+- Entry point: `@app.command() def chat(...)` in `cli/main.py`; all chat logic under `cli/chat/`.
+- Key files: `manifest.py` (run_manifest.json read/write), `session.py` (JSONL persistence), `prompt.py` (system prompt builder), `agent.py` (LangGraph sub-graph + LLM factory), `repl.py` (prompt_toolkit REPL loop).
+- `safe_ticker()` lives in `cli/chat/manifest.py` and is imported by `cli/main.py`; do not duplicate ticker-escaping logic elsewhere.
+- `get_all_tools_for_asset_type(toolkit, config)` in `agent_utils.py` aggregates market + news + fundamentals + sentiment tools for the current asset type; use this instead of copy-pasting per-analyst tool lists.
+- Chat LLM triple: `chat_llm_provider / chat_llm_model / chat_llm_effort` (default: `openai / gpt-4o / default`). Keep `chat_llm_effort` as `default` for non-reasoning models; only set to a named effort level when the model supports reasoning effort (o-series, claude-3-5+).
+- `custom_openai` / `custom_anthropic` chat providers: `build_chat_llm()` reads `CUSTOM_OPENAI_BASE_URL` / `CUSTOM_OPENAI_API_KEY` (and Anthropic equivalents) directly from env — these are NOT in `DEFAULT_CONFIG`.
+- Report directory layout written by `save_report_to_disk()`: `{results_dir}/{safe_ticker}/{date}/{1_analysts,2_research,3_trading,4_risk,5_portfolio}/`. `run_manifest.json` sits at `{results_dir}/{safe_ticker}/{date}/run_manifest.json`.
+- Session JSONL: header line (type=header) + message lines (type=msg). `_repair_incomplete_tool_calls()` validates tool_call ids on load; if any expected id is missing, the whole turn is dropped.
+
 ## Development Hygiene
 
 - Prefer minimal, focused edits; avoid formatting churn because this branch rebases against upstream.
+- `DEFAULT_CONFIG.copy()` is a shallow copy — nested `data_vendors` dict is shared. Always use `copy.deepcopy(DEFAULT_CONFIG)` before mutating vendor keys.
 - When adding analyst tools, update both `llm.bind_tools(tools)` and `TradingAgentsGraph._create_tool_nodes()` unless the agent is intentionally no-ToolNode like Sentiment.
 - When an OKX endpoint turns out to require auth, prefer a graceful stub (placeholder string) over removing the function — leaves the door open for HMAC-signed wiring later. Document the stub at the function docstring AND in this file's OKX section.
 - Use `git diff --check` before committing prompt/doc rewrites.
