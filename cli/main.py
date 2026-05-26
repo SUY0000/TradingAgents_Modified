@@ -1372,5 +1372,62 @@ def analyze(
     run_analysis(checkpoint=checkpoint)
 
 
+@app.command()
+def chat(
+    ticker: str = typer.Option(..., "--ticker", "-t", help="标的（与运行分析时一致）"),
+    date: str = typer.Option(..., "--date", "-d", help="报告日期 YYYY-MM-DD"),
+):
+    """对历史报告进行回溯对话。"""
+    import datetime as _dt
+    from tradingagents.default_config import DEFAULT_CONFIG
+    from tradingagents.dataflows.config import set_config
+    from tradingagents.agents.utils.agent_utils import Toolkit
+    from cli.chat.manifest import (
+        find_report_dir, load_manifest, load_reports, apply_manifest_to_config,
+    )
+    from cli.chat.session import default_session_path, ensure_session
+    from cli.chat.agent import build_chat_llm, build_chat_app, load_past_context
+    from cli.chat.repl import run_repl
+
+    import copy
+    config = copy.deepcopy(DEFAULT_CONFIG)
+
+    try:
+        report_dir = find_report_dir(Path(config["results_dir"]), ticker, date)
+    except FileNotFoundError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(1)
+
+    try:
+        manifest = load_manifest(report_dir)
+    except FileNotFoundError as e:
+        console.print(f"[red]{e}[/red]")
+        raise typer.Exit(1)
+
+    reports_bundle = load_reports(report_dir, manifest)
+    working_config = apply_manifest_to_config(config, manifest)
+
+    # Apply manifest config to global singleton so tools route correctly
+    set_config(working_config)
+
+    try:
+        llm = build_chat_llm(working_config)
+    except Exception as e:
+        console.print(f"[red]Failed to build chat LLM: {e}[/red]")
+        raise typer.Exit(1)
+
+    toolkit = Toolkit(working_config)
+    past_context = load_past_context(manifest.get("company_of_interest", ticker), working_config)
+    today = _dt.date.today()
+
+    app_graph = build_chat_app(
+        manifest, reports_bundle, past_context, llm, toolkit, working_config, today
+    )
+
+    session_path = default_session_path(report_dir)
+    ensure_session(session_path, manifest)
+    run_repl(app_graph, session_path, manifest, working_config)
+
+
 if __name__ == "__main__":
     app()
