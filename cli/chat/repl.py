@@ -107,11 +107,85 @@ def _print_header(manifest: dict, session_path: Path, config: dict, n_messages: 
     )
 
 
+def _handle_slash(
+    user_input: str,
+    config: dict,
+    rebuild_fn,
+    app_graph_ref: list,
+    manifest: dict,
+) -> str:
+    """Dispatch a slash command.
+
+    Returns one of: "continue", "break", "unknown".
+    """
+    parts = user_input.split(None, 1)
+    cmd = parts[0].lower()
+    arg = parts[1].strip() if len(parts) > 1 else ""
+
+    if cmd == "/help":
+        console.print(
+            "[bold cyan]/help[/bold cyan]            Show this help.\n"
+            "[bold cyan]/lang [LANG][/bold cyan]     Switch output language "
+            "(e.g. /lang zh, /lang en). Prompts if omitted.\n"
+            "[bold cyan]/model[/bold cyan]           Re-select chat LLM provider, model, and effort.\n"
+            "[bold cyan]/exit, /quit[/bold cyan]     Exit the chat."
+        )
+        return "continue"
+
+    if cmd == "/lang":
+        if rebuild_fn is None:
+            console.print("[yellow]Hot-swap unavailable in this session.[/yellow]")
+            return "continue"
+        if arg:
+            lang = arg
+        else:
+            try:
+                import questionary
+                lang = questionary.text("Output language (e.g. en, zh, Japanese):").ask()
+                if not lang:
+                    console.print("[dim]Cancelled.[/dim]")
+                    return "continue"
+                lang = lang.strip()
+            except ImportError:
+                console.print("[yellow]questionary not installed; pass language as argument: /lang zh[/yellow]")
+                return "continue"
+        config["output_language"] = lang
+        try:
+            app_graph_ref[0] = rebuild_fn(config)
+            console.print(
+                f"[green]Language switched to {lang}. "
+                f"The next response will use the new language.[/green]"
+            )
+        except Exception as exc:
+            console.print(f"[red]Failed to rebuild graph: {exc}[/red]")
+        return "continue"
+
+    if cmd == "/model":
+        if rebuild_fn is None:
+            console.print("[yellow]Hot-swap unavailable in this session.[/yellow]")
+            return "continue"
+        from cli.chat.llm_setup import setup_chat_llm_interactive
+        setup_chat_llm_interactive(config)
+        try:
+            app_graph_ref[0] = rebuild_fn(config)
+            new_model = config.get("chat_llm_model", "?")
+            new_provider = config.get("chat_llm_provider", "?")
+            console.print(
+                f"[green]Model switched to {new_provider}/{new_model}.[/green]"
+            )
+        except Exception as exc:
+            console.print(f"[red]Failed to rebuild graph: {exc}[/red]")
+        return "continue"
+
+    return "unknown"
+
+
 def run_repl(
     app_graph,
     session_path: Path,
     manifest: dict,
     config: dict,
+    rebuild_fn=None,
 ) -> None:
     """Main REPL loop."""
     try:
@@ -129,6 +203,7 @@ def run_repl(
         console.print("[dim]新 session 已创建。输入问题开始复盘讨论。[/dim]")
     console.print(Rule(style="dim"))
 
+    app_graph_ref = [app_graph]
     model = config.get("chat_llm_model", "")
     effort = config.get("chat_llm_effort", "")
     pt_session = PromptSession()
@@ -158,6 +233,14 @@ def run_repl(
         if user_input_stripped.lower() in {"/exit", "/quit", "exit", "quit"}:
             break
 
+        if user_input_stripped.startswith("/"):
+            action = _handle_slash(user_input_stripped, config, rebuild_fn, app_graph_ref, manifest)
+            if action == "break":
+                break
+            if action == "unknown":
+                console.print("[yellow]Unknown command. Type /help to see available commands.[/yellow]")
+            continue
+
         # Append user message
         user_msg = HumanMessage(content=user_input)
         state_messages.append(user_msg)
@@ -166,7 +249,7 @@ def run_repl(
         # Invoke agent
         console.print()
         try:
-            new_msgs = stream_invoke(app_graph, state_messages, config)
+            new_msgs = stream_invoke(app_graph_ref[0], state_messages, config)
         except KeyboardInterrupt:
             console.print("[yellow]\n已中断[/yellow]")
             # Remove the user message we just appended since we got no response

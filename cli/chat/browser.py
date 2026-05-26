@@ -71,7 +71,7 @@ def format_report_label(manifest: dict, report_dir: Path) -> str:
     except Exception:
         pass
 
-    return f"{date:<10}  {ticker_str:<16}  {asset_type:<8}  (session: {msg_count} msgs)"
+    return f"{date:<10}  {ticker_str:<16}  {asset_type:<8}  {report_dir.name:<17}  (session: {msg_count} msgs)"
 
 
 def pick_report(results_dir: Path) -> Optional[Path]:

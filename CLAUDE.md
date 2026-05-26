@@ -188,13 +188,15 @@ ENV:
 ## Chat Replay (`tradingagents chat`)
 
 - Entry point: `@app.command() def chat(...)` in `cli/main.py`; all chat logic under `cli/chat/`.
-- Key files: `manifest.py` (run_manifest.json read/write), `session.py` (JSONL persistence), `prompt.py` (system prompt builder), `agent.py` (LangGraph sub-graph + LLM factory), `repl.py` (prompt_toolkit REPL loop).
+- Key files: `manifest.py` (run_manifest.json read/write), `session.py` (JSONL persistence), `prompt.py` (system prompt builder), `agent.py` (LangGraph sub-graph + LLM factory), `repl.py` (prompt_toolkit REPL loop), `browser.py` (report picker), `llm_setup.py` (interactive LLM config for chat).
 - `safe_ticker()` lives in `cli/chat/manifest.py` and is imported by `cli/main.py`; do not duplicate ticker-escaping logic elsewhere.
 - `get_all_tools_for_asset_type(toolkit, config)` in `agent_utils.py` aggregates market + news + fundamentals + sentiment tools for the current asset type; use this instead of copy-pasting per-analyst tool lists.
 - Chat LLM triple: `chat_llm_provider / chat_llm_model / chat_llm_effort` (default: `openai / gpt-4o / default`). Keep `chat_llm_effort` as `default` for non-reasoning models; only set to a named effort level when the model supports reasoning effort (o-series, claude-3-5+).
 - `custom_openai` / `custom_anthropic` chat providers: `build_chat_llm()` reads `CUSTOM_OPENAI_BASE_URL` / `CUSTOM_OPENAI_API_KEY` (and Anthropic equivalents) directly from env — these are NOT in `DEFAULT_CONFIG`.
-- Report directory layout written by `save_report_to_disk()`: `{results_dir}/{safe_ticker}/{date}/{1_analysts,2_research,3_trading,4_risk,5_portfolio}/`. `run_manifest.json` sits at `{results_dir}/{safe_ticker}/{date}/run_manifest.json`.
+- Report directory layout written by `save_report_to_disk()`: `./reports/{safe_ticker}/{YYYYMMDD_HHMMSS}/{reports/{1_analysts,2_research,3_trading,4_risk,5_portfolio},run_manifest.json,message_tool.log}`. Anchor is `Path.cwd() / "reports"` via `get_reports_dir()` in `cli/chat/manifest.py` — strictly cwd, no walk-up. Same-second reruns get `_2`, `_3` suffix via `_next_available_dir()`. `find_report_dir(root, ticker, date)` filters by `manifest["analysis_date"]` and returns the latest matching timestamp.
 - Session JSONL: header line (type=header) + message lines (type=msg). `_repair_incomplete_tool_calls()` validates tool_call ids on load; if any expected id is missing, the whole turn is dropped.
+- `_build_chat_kwargs()` in `agent.py`: falls back to the provider's canonical env var (e.g. `OPENAI_API_KEY`) when `config["llm_api_key"]` is absent — `setup_chat_llm_interactive()` populates `llm_api_key` as the primary path; env fallback is the safety net.
+- REPL slash commands (`cli/chat/repl.py::_handle_slash`): `/help` `/lang [LANG]` `/model` `/exit`. `/lang` and `/model` rebuild the compiled graph via `rebuild_app_graph()` (`cli/chat/agent.py`); `app_graph` is held in a single-element list (`app_graph_ref`) so the dispatcher can swap it. REPL maintains `state_messages` itself, so rebuild is lossless. Unknown `/...` commands print a hint and do NOT forward to the LLM.
 
 ## Development Hygiene
 

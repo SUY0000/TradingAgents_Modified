@@ -26,7 +26,7 @@ from tradingagents.default_config import DEFAULT_CONFIG
 from cli.models import AnalystType
 from cli.utils import *
 from cli.stats_handler import StatsCallbackHandler
-from cli.chat.manifest import safe_ticker, write_run_manifest
+from cli.chat.manifest import safe_ticker, write_run_manifest, get_reports_dir, _next_available_dir
 
 console = Console()
 
@@ -1089,6 +1089,9 @@ def run_analysis(checkpoint: bool = False):
     selected_set = {analyst.value for analyst in selections["analysts"]}
     selected_analyst_keys = [a for a in ANALYST_ORDER if a in selected_set]
 
+    # Pin results_dir to the actual cwd at run time (not import-time snapshot)
+    config["results_dir"] = str(get_reports_dir())
+
     # Initialize the graph with callbacks bound to LLMs
     graph = TradingAgentsGraph(
         selected_analyst_keys,
@@ -1104,7 +1107,9 @@ def run_analysis(checkpoint: bool = False):
     start_time = time.time()
 
     # Create result directory
-    results_dir = Path(config["results_dir"]) / safe_ticker(selections["ticker"]) / selections["analysis_date"]
+    ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    base = get_reports_dir() / safe_ticker(selections["ticker"])
+    results_dir = _next_available_dir(base, ts)
     results_dir.mkdir(parents=True, exist_ok=True)
     report_dir = results_dir / "reports"
     report_dir.mkdir(parents=True, exist_ok=True)
@@ -1330,23 +1335,7 @@ def run_analysis(checkpoint: bool = False):
 
     # Post-analysis prompts (outside Live context for clean interaction)
     console.print("\n[bold cyan]Analysis Complete![/bold cyan]\n")
-
-    # Prompt to save report
-    save_choice = typer.prompt("Save report?", default="Y").strip().upper()
-    if save_choice in ("Y", "YES", ""):
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        default_path = Path.cwd() / "reports" / f"{selections['ticker']}_{timestamp}"
-        save_path_str = typer.prompt(
-            "Save path (press Enter for default)",
-            default=str(default_path)
-        ).strip()
-        save_path = Path(save_path_str)
-        try:
-            report_file = save_report_to_disk(final_state, selections["ticker"], save_path)
-            console.print(f"\n[green]✓ Report saved to:[/green] {save_path.resolve()}")
-            console.print(f"  [dim]Complete report:[/dim] {report_file.name}")
-        except Exception as e:
-            console.print(f"[red]Error saving report: {e}[/red]")
+    console.print(f"[green]✓ Report saved to:[/green] {results_dir.resolve()}")
 
     # Prompt to display full report
     display_choice = typer.prompt("\nDisplay full report on screen?", default="Y").strip().upper()
@@ -1389,11 +1378,12 @@ def chat(
     from tradingagents.agents.utils.agent_utils import Toolkit
     from cli.chat.manifest import (
         find_report_dir, load_manifest, load_reports, apply_manifest_to_config,
+        get_reports_dir as _get_reports_dir,
     )
     from cli.chat.browser import pick_report
     from cli.chat.llm_setup import setup_chat_llm_interactive
     from cli.chat.session import default_session_path, ensure_session
-    from cli.chat.agent import build_chat_llm, build_chat_app, load_past_context
+    from cli.chat.agent import build_chat_llm, build_chat_app, load_past_context, rebuild_app_graph
     from cli.chat.repl import run_repl
 
     config = copy.deepcopy(DEFAULT_CONFIG)
@@ -1401,7 +1391,7 @@ def chat(
     # 1. 定位 report_dir
     if ticker and date:
         try:
-            report_dir = find_report_dir(Path(config["results_dir"]), ticker, date)
+            report_dir = find_report_dir(_get_reports_dir(), ticker, date)
         except FileNotFoundError as e:
             console.print(f"[red]{e}[/red]")
             raise typer.Exit(1)
@@ -1409,7 +1399,7 @@ def chat(
         console.print("[red]--ticker 与 --date 需同时提供[/red]")
         raise typer.Exit(2)
     else:
-        report_dir = pick_report(Path(config["results_dir"]))
+        report_dir = pick_report(_get_reports_dir())
         if report_dir is None:
             console.print("[yellow]已取消[/yellow]")
             raise typer.Exit(0)
@@ -1454,7 +1444,10 @@ def chat(
         f"· {chat_provider}/{chat_model}[/dim]"
     )
 
-    run_repl(app_graph, session_path, manifest, working_config)
+    def _rebuild(cfg):
+        return rebuild_app_graph(manifest, reports_bundle, past_context, cfg, today)
+
+    run_repl(app_graph, session_path, manifest, working_config, rebuild_fn=_rebuild)
 
 
 if __name__ == "__main__":

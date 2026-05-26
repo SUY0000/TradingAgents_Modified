@@ -118,7 +118,8 @@ def build_chat_app(
     llm_with_tools = llm.bind_tools(tools)
     tool_names_csv = ", ".join(t.name for t in tools)
     system_prompt = build_system_prompt(
-        manifest, reports_bundle, past_context, today, tool_names_csv
+        manifest, reports_bundle, past_context, today, tool_names_csv,
+        output_language=config.get("output_language"),
     )
 
     def chat_node(state: ChatState):
@@ -136,3 +137,21 @@ def build_chat_app(
     graph.add_conditional_edges("chat", route, {"tools": "tools", END: END})
     graph.add_edge("tools", "chat")
     return graph.compile()
+
+
+def rebuild_app_graph(
+    manifest: dict,
+    reports_bundle: dict,
+    past_context: str,
+    config: dict,
+    today: datetime.date,
+):
+    """Rebuild the chat app graph after /model or /lang.
+
+    Re-instantiates the LLM (picks up updated chat_llm_* and output_language
+    from config) and re-binds tools. REPL keeps its own message history, so
+    nothing is lost by reconstructing the compiled graph.
+    """
+    llm = build_chat_llm(config)
+    toolkit = Toolkit(config)
+    return build_chat_app(manifest, reports_bundle, past_context, llm, toolkit, config, today)

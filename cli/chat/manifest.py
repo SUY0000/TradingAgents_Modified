@@ -19,20 +19,68 @@ def safe_ticker(ticker: str) -> str:
     return ticker.replace("/", "_").replace("\\", "_").replace(":", "_")
 
 
+def get_reports_dir() -> Path:
+    """Return the reports directory anchored at the current working directory.
+
+    All chat-CLI report I/O (auto-save target, chat browser scan root) goes
+    through this helper so the policy is centralized. Policy: strictly
+    `Path.cwd() / "reports"` — no walk-up to project root.
+    """
+    return Path.cwd() / "reports"
+
+
+def _next_available_dir(base: Path, name: str) -> Path:
+    """If base/name exists, return base/{name}_2, _3, ... until a free slot is found."""
+    candidate = base / name
+    if not candidate.exists():
+        return candidate
+    i = 2
+    while True:
+        candidate = base / f"{name}_{i}"
+        if not candidate.exists():
+            return candidate
+        i += 1
+
+
 def find_report_dir(results_dir: Path, ticker: str, date: str) -> Path:
-    """返回 {results_dir}/{safe_ticker(ticker)}/{date}/。如不存在，抛 FileNotFoundError。"""
+    """Find the most-recent timestamp directory for *ticker* on *date*.
+
+    Scans {results_dir}/{safe_ticker(ticker)}/*/run_manifest.json and filters
+    by manifest["analysis_date"] == date.  Returns the directory of the most
+    recently created matching report (largest timestamp directory name).
+
+    Raises FileNotFoundError if the ticker directory or a matching date is not
+    found.
+    """
     try:
-        ticker_dir = safe_ticker(ticker)
         datetime.strptime(date, "%Y-%m-%d")
     except ValueError as exc:
         raise FileNotFoundError(str(exc)) from exc
-    path = Path(results_dir) / ticker_dir / date
-    if not path.exists():
+
+    ticker_dir = Path(results_dir) / safe_ticker(ticker)
+    if not ticker_dir.exists():
         raise FileNotFoundError(
-            f"Report directory not found: {path}\n"
-            f"Check --ticker and --date; run `tradingagents` first to generate a report."
+            f"No reports for ticker '{ticker}': directory not found at {ticker_dir}\n"
+            f"Check --ticker; run `tradingagents` first to generate a report."
         )
-    return path
+
+    matches = []
+    for manifest_path in ticker_dir.glob("*/run_manifest.json"):
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if manifest.get("analysis_date") == date:
+            matches.append(manifest_path.parent)
+
+    if not matches:
+        raise FileNotFoundError(
+            f"No report for ticker '{ticker}' on date '{date}'.\n"
+            f"Check --date; run `tradingagents` first to generate a report."
+        )
+
+    # Pick the latest by lexicographic directory name (timestamps sort correctly)
+    return sorted(matches, key=lambda p: p.name, reverse=True)[0]
 
 
 def write_run_manifest(
@@ -43,7 +91,7 @@ def write_run_manifest(
 ) -> None:
     """写 {save_path}/run_manifest.json。
 
-    save_path 是 results_dir（即 ~/.tradingagents/logs/{ticker}/{date}/）。
+    save_path 是 results_dir（即 ./reports/{safe_ticker}/{timestamp}/）。
     """
     ticker = selections.get("ticker", "")
     analysis_date = selections.get("analysis_date", "")

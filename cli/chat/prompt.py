@@ -10,6 +10,8 @@ def build_system_prompt(
     past_context: str,
     today: datetime.date,
     tool_names_csv: str = "",
+    *,
+    output_language: str | None = None,
 ) -> str:
     ticker = manifest.get("ticker", "")
     analysis_date = manifest.get("analysis_date", "")
@@ -61,7 +63,7 @@ def build_system_prompt(
     past_block = past_context.strip() if past_context and past_context.strip() else "_（无）_"
 
     # Language instruction
-    lang = manifest.get("output_language", "English")
+    lang = output_language or manifest.get("output_language", "English")
     if lang.strip().lower() == "english":
         language_instruction = ""
     else:
