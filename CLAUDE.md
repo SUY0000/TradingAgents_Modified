@@ -2,6 +2,12 @@
 
 TradingAgents is a LangGraph-based multi-agent trading framework. Agents produce one of: BUY, OVERWEIGHT, HOLD, UNDERWEIGHT, SELL.
 
+Two entry points:
+- `tradingagents` / `tradingagents analyze` — full multi-agent analysis pipeline
+- `tradingagents chat` — interactive retrospective dialogue against a saved report
+
+---
+
 ## Fork / Worktree Rules
 
 This fork uses two worktrees:
@@ -53,7 +59,11 @@ There is no normal unit-test suite; files under `tests/` are mostly ad-hoc/API-k
 
 Known upstream warning: `python -m compileall -f -q tradingagents cli` reports `cli/utils.py` invalid escape sequence around ``\`OLLAMA_BASE_URL\``; this is upstream v0.2.5 behavior.
 
-## Architecture
+---
+
+## Part A: Analyze (`tradingagents` / `tradingagents analyze`)
+
+### Architecture
 
 Core graph: `tradingagents/graph/setup.py`
 
@@ -73,7 +83,24 @@ Key files:
 - `tradingagents/default_config.py` — config defaults and `TRADINGAGENTS_*` env overrides.
 - `tradingagents/llm_clients/factory.py` — provider routing.
 
-## Config / Data Routing
+### Report Output
+
+Reports save to `./reports/{safe_ticker}/{YYYYMMDD_HHMMSS}/`:
+```
+reports/BTC_USDT/20260527_143022/
+├── run_manifest.json         # ticker, asset_type, data_vendors, analysis_date, …
+├── message_tool.log          # LLM message + tool-call trace
+└── reports/
+    ├── 1_analysts/{market,sentiment,news,fundamentals}.md
+    ├── 2_research/{bull,bear,manager}.md
+    ├── 3_trading/trader.md
+    ├── 4_risk/{aggressive,conservative,neutral}.md
+    └── 5_portfolio/decision.md
+```
+
+`safe_ticker()` converts `/` `\` `:` to `_` (e.g. `BTC/USDT` → `BTC_USDT`), defined in `cli/chat/manifest.py`. Same-second reruns get `_2`, `_3` suffix via `_next_available_dir()`.
+
+### Config / Data Routing
 
 Important config keys:
 - `data_vendors`: `core_stock_apis`, `technical_indicators`, `news_data`, `fundamental_data`, `crypto_market_data`, `cn_market_data`, `cn_sentiment_data`.
@@ -88,7 +115,7 @@ Asset type helper:
 - A-share mode: `core_stock_apis == "akshare"` and `technical_indicators == "akshare"`.
 - Crypto mode: `core_stock_apis == "ccxt"` and `technical_indicators == "ccxt"`.
 
-## Agent / Prompt Rules
+### Agent / Prompt Rules
 
 Pipeline responsibility boundary:
 - Analysts: describe objective evidence only; no entry/stop/sizing/trade recommendation.
@@ -102,7 +129,7 @@ Prompt patterns:
 - Agent factories return callable node functions, not classes: `create_X(llm) -> node`.
 - Analyst tool-calling outer template should stay: `"Tools available: {tool_names}.\n\n{system_message}\n\nCurrent date: {current_date}. {instrument_context}"`.
 - Completion gate is code-level: `if len(result.tool_calls) == 0: report = result.content`.
-- Avoid generic multi-agent boilerplate like “another assistant will help where you left off”; it weakens mandatory tool behavior.
+- Avoid generic multi-agent boilerplate like "another assistant will help where you left off"; it weakens mandatory tool behavior.
 - `get_news(ticker, ...)` is strict ticker-based, not free-text search; prompts must not ask for CEO names or sentiment keywords as query strings.
 - `get_indicators(indicator=...)` accepts comma-separated indicators; prompt should request one call per timeframe, not one call per indicator.
 - `sentiment_analyst.py` has no ToolNode: it prefetches data and makes one LLM call across all three asset paths (US stock = yfinance+StockTwits+Reddit; A-share = 3-layer akshare; crypto = F&G + CoinGecko votes). `trading_graph._create_tool_nodes()` must not register `social`. `crypto_sentiment_tools.py` exposes `get_crypto_smart_money` / `get_crypto_margin_leverage` as `@tool`s but they are not currently bound to any analyst — either wire them in or treat as dead code.
@@ -110,9 +137,9 @@ Prompt patterns:
 
 Prompt/graph smoke test: after editing asset-specific prompts or ToolNode wiring, use a dummy LLM to initialize stock/A股/crypto configs and compile `TradingAgentsGraph` without API keys.
 
-## Asset-Specific Gotchas
+### Asset-Specific Gotchas
 
-### Crypto / CCXT / OKX
+#### Crypto / CCXT / OKX
 
 Symbol / ticker:
 - **Single ticker source**: CLI crypto mode prompts for one CCXT pair (e.g. `BTC/USDT`); `cli/main.py` derives `company_of_interest` via `ccxt_to_display_ticker()`. Previous dual yfinance + CCXT input was removed in `7361e60`.
@@ -153,7 +180,7 @@ ENV:
 - Crypto news RSS, DefiLlama, Alternative.me, and current OKX public endpoints require no env vars.
 - No OKX env vars currently used.
 
-### A-share / AkShare
+#### A-share / AkShare
 
 - External ticker format: `600519.SH`, `000001.SZ`, `430047.BJ`; state/agents preserve this format.
 - Vendor converts via `_resolve_a_share_symbol(symbol, fmt)`: `6digit` for many APIs, `exchange_prefix` (`SH600519`) for financial statements and some detail endpoints.
@@ -167,7 +194,165 @@ ENV:
 - A-share sentiment prefetches three layers from `cn_sentiment_tools.py`: retail hot-rank, sell-side research, buy-side institutional visits.
 - A-share fundamentals append `get_earnings_forecast`, `get_shareholder_count`, `get_valuation_comparison` to the four core fundamentals tools.
 
-## LLM / CLI Notes
+### Memory / Reflection
+
+- Memory uses BM25/offline matching; no embeddings needed.
+- `TradingMemoryLog` stores final decisions and resolves outcomes on later same-ticker runs.
+- Reflection alpha uses `_resolve_benchmark()` and labels alpha as `Alpha vs <benchmark>`.
+
+---
+
+## Part B: Chat Replay (`tradingagents chat`)
+
+`tradingagents chat` loads a past report and lets the user discuss its findings with an
+agent that has access to the full original report context plus **the same data tools**
+(market / news / fundamentals / sentiment) for that asset type, so it can pull fresh data
+and compare against the report's conclusions.
+
+### CLI Entry Point
+
+`@app.command() def chat()` in `cli/main.py` — **no CLI arguments** (no `--ticker`,
+`--date`, no typer completion flags). Always enters the interactive report browser.
+
+Flow:
+1. Scan `Path.cwd() / "reports"` → `pick_report()` questionary list.
+2. Load `run_manifest.json` → vendor / asset-type config; load all report markdown.
+3. Run `setup_chat_llm_interactive()` to configure provider / model / effort / key.
+4. Pick the most-recent session for this report (or create `{ts}-default.jsonl`).
+5. Build the LangGraph chat sub-graph + enter REPL.
+
+### Key Files
+
+```
+cli/chat/
+├── __init__.py
+├── manifest.py    # run_manifest.json read/write, safe_ticker, get_reports_dir, find_report_dir
+├── browser.py     # interactive report picker (questionary.select)
+├── llm_setup.py   # interactive LLM provider/model/effort/key selection for chat
+├── session.py     # multi-session JSONL persistence
+├── prompt.py      # system prompt builder for the chat agent
+├── agent.py       # LangGraph sub-graph, chat LLM construction, rebuild_app_graph
+└── repl.py        # prompt_toolkit REPL loop, slash command dispatcher, stream rendering
+```
+
+### LLM Configuration for Chat
+
+Chat uses a **single** LLM triple (no quick/deep split):
+- `chat_llm_provider` / `chat_llm_model` / `chat_llm_effort`
+- Default: `openai / gpt-4o / default` (`tradingagents/default_config.py:75-77`)
+- Env overrides: `TRADINGAGENTS_CHAT_LLM_PROVIDER`, `TRADINGAGENTS_CHAT_LLM_MODEL`, `TRADINGAGENTS_CHAT_LLM_EFFORT`
+- `/model` persists the selection to `{cwd}/.env` via `dotenv.set_key` (mirrors `ensure_api_key`)
+- `setup_chat_llm_interactive(config)` in `cli/chat/llm_setup.py` walks the user through provider/model/effort/key; has a fast-path when env is pre-configured. `/model` in REPL calls it with `force_interactive=True`.
+- `/model` reuses the `deep` model pool (chat is reasoning-heavy); the original `"chat"` mode blew up with `KeyError` because `MODEL_OPTIONS` only has `quick`/`deep` keys.
+- `_build_chat_kwargs()` in `agent.py` falls back to the provider's canonical env var when `config["llm_api_key"]` is absent — `setup_chat_llm_interactive()` populates `llm_api_key` as the primary path.
+- `custom_openai` / `custom_anthropic`: `build_chat_llm()` reads `CUSTOM_OPENAI_BASE_URL` / `CUSTOM_OPENAI_API_KEY` directly from env — these are NOT in `DEFAULT_CONFIG`.
+
+### Report Loading
+
+`run_manifest.json` supplies:
+- `ticker`, `company_of_interest`, `ccxt_symbol`, `benchmark_ticker`
+- `asset_type`, `data_vendors`, `tool_vendors`
+- `analysis_date`, `output_language`
+- `report_files` — relative paths to each sub-report markdown
+
+These override the `DEFAULT_CONFIG` copy for vendor routing but do NOT include LLM settings
+(which follow the current CLI config). `safe_ticker()` and `get_reports_dir()` live in
+`cli/chat/manifest.py`; do not duplicate ticker-escaping logic elsewhere.
+
+The chat agent's system prompt receives all 10 report sections (aligned with
+`portfolio_manager.py`'s context): 4 analyst reports (full text), research manager plan,
+trader plan, risk debate history (3 debaters concatenated), portfolio manager final
+decision, and `past_context` from `TradingMemoryLog`.
+
+### Agent & Tool Binding
+
+`build_chat_app()` in `agent.py` constructs a simple LangGraph sub-graph:
+
+```
+START → chat_node (LLM with bound tools) → conditional: tool_calls? → tools → chat_node
+                                                                        → END
+```
+
+State: `{"messages": list}` — no checkpointer, state held in REPL.
+
+Tools come from `get_all_tools_for_asset_type(toolkit, config)` in `agent_utils.py`, which
+aggregates market + news + fundamentals + sentiment tools for the detected asset type.
+Use this instead of copy-pasting per-analyst tool lists.
+
+`rebuild_app_graph()` re-instantiates the LLM from config and re-compiles the graph — used
+by `/model` and `/lang` to hot-swap without losing message history. REPL keeps
+`state_messages` itself, so rebuilds are lossless.
+
+`get_chat_tools(config)` returns the tool list on demand for the `/tools` slash command.
+
+### Sessions
+
+Multi-session per report. Files under `{report_dir}/sessions/{YYYYMMDD-HHMMSS}-{slug}.jsonl`.
+
+Startup picks `latest_session_path(report_dir)` (most recent by mtime), creating a new
+`{ts}-default.jsonl` if none exist. Old `default.jsonl` files (no timestamp prefix) load
+via the same mtime sort and get a fresh prefix on first `/title` rename.
+
+JSONL format:
+- Line 0 (header): `{"type":"header","id":"<uuid>","title":"...","created_at":"...","report_ref":"..."}`
+- Subsequent lines (messages): `{"type":"msg","role":"user|assistant|tool","ts":"...","content":"...",...}`
+- Assistant messages additionally carry `model`, `effort`, and optional `tool_calls`.
+
+`load_messages()` skips the header line and converts each `type=msg` line to a LangChain
+message. `_repair_incomplete_tool_calls()` validates tool_call IDs on load; if any expected
+ID is missing, the trailing user turn is dropped. Messages are stored and loaded as full
+content — no truncation. `rewrite_header()` writes atomically via `.tmp` + `os.replace`.
+
+Key helpers in `session.py` (all additive, `default_session_path` preserved for back-compat):
+- `make_session_path(report_dir, title)` — create a timestamped path
+- `list_sessions(report_dir)` — scan and sort by mtime
+- `latest_session_path(report_dir)` — most recent entry
+- `rename_session_file(path, new_title)` — preserve existing timestamp prefix
+- `delete_session(path)` — unlink
+
+### REPL & Slash Commands
+
+Prompt-toolkit loop with rich Markdown streaming. `app_graph` held in `app_graph_ref = [graph]`;
+`session_path` held in `session_path_ref = [path]` so the slash dispatcher can swap them.
+`state_messages` is mutated via `.clear()` + `.extend(load_messages(...))` to preserve closure
+references.
+
+On startup and after `/sessions` or `/delete` switch, `_print_history()` echoes the most recent
+20 messages as a compact log (`> user`, `● assistant`, `⏺ tool`). History older than 20 items
+gets an omission hint. The full message content is always in `state_messages` for the agent.
+
+Slash commands (`_handle_slash` in `repl.py`):
+
+| Command | Action | Rebuilds graph? |
+|---|---|---|
+| `/help` | Print command table | No |
+| `/tools` | List bound tools via `get_chat_tools()` | No |
+| `/lang [LANG]` | Switch output language + rebuild | Yes |
+| `/model` | Reconfigure LLM provider/model/effort + rebuild | Yes |
+| `/sessions` | questionary.select → swap JSONL, reload messages | No |
+| `/new [title]` | Create new session, clear messages | No |
+| `/title <name>` | Rename current session file + header | No |
+| `/delete` | Delete current session, switch to next | No |
+| `/exit`, `/quit` | Exit REPL | — |
+
+Graph-rebuilding commands (`/lang`, `/model`) call `rebuild_app_graph()` and assign
+`app_graph_ref[0]`. Session-switching commands swap only the JSONL — same report, same tools,
+same model — so no graph rebuild is needed. Unknown `/...` prints a hint and does NOT forward
+to the LLM.
+
+### System Prompt
+
+Built by `build_system_prompt()` in `prompt.py`. Injects the full report context (10 sections),
+`asset_prompt_context` (reuses `agent_utils`), language instruction, and tool names. The
+prompt instructs the agent to distinguish between internal-logic critiques (no tools) and
+post-report data verification (must call tools), and forbids issuing a new BUY/SELL decision.
+
+`output_language` is read from config at graph build time (or manifest fallback), so `/lang`
+rebuilds the graph with the new language instruction.
+
+---
+
+## LLM / Provider Notes (shared)
 
 - OpenAI-compatible providers include OpenAI, custom_openai, xAI, DeepSeek, Qwen/Qwen-CN, GLM/GLM-CN, MiniMax/MiniMax-CN, Ollama, OpenRouter.
 - `custom_openai` uses `CUSTOM_OPENAI_BASE_URL` / `CUSTOM_OPENAI_API_KEY`; `custom_anthropic` uses `CUSTOM_ANTHROPIC_BASE_URL` / `CUSTOM_ANTHROPIC_API_KEY`.
@@ -177,28 +362,6 @@ ENV:
 - OpenAI/Anthropic effort menus share Default/Low/Medium/High/XHigh/Max with High as CLI default; select Default when a backend rejects effort fields.
 - DeepSeek supports `deepseek_reasoning_effort` and `deepseek_thinking_enabled`; thinking mode is injected through `extra_body.thinking` in `DeepSeekChatOpenAI`.
 - CLI interactive selection helpers live mostly in `cli/utils.py`; simple prompt wrappers and run assembly live in `cli/main.py`.
-- Adding CLI steps requires manual step-number renumbering in `cli/main.py`.
-
-## Memory / Reflection
-
-- Memory uses BM25/offline matching; no embeddings needed.
-- `TradingMemoryLog` stores final decisions and resolves outcomes on later same-ticker runs.
-- Reflection alpha uses `_resolve_benchmark()` and labels alpha as `Alpha vs <benchmark>`.
-
-## Chat Replay (`tradingagents chat`)
-
-- Entry point: `@app.command() def chat(...)` in `cli/main.py`; all chat logic under `cli/chat/`.
-- Key files: `manifest.py` (run_manifest.json read/write), `session.py` (JSONL persistence), `prompt.py` (system prompt builder), `agent.py` (LangGraph sub-graph + LLM factory), `repl.py` (prompt_toolkit REPL loop), `browser.py` (report picker), `llm_setup.py` (interactive LLM config for chat).
-- `safe_ticker()` lives in `cli/chat/manifest.py` and is imported by `cli/main.py`; do not duplicate ticker-escaping logic elsewhere.
-- `get_all_tools_for_asset_type(toolkit, config)` in `agent_utils.py` aggregates market + news + fundamentals + sentiment tools for the current asset type; use this instead of copy-pasting per-analyst tool lists.
-- Chat LLM triple: `chat_llm_provider / chat_llm_model / chat_llm_effort` (default: `openai / gpt-4o / default`). Keep `chat_llm_effort` as `default` for non-reasoning models; only set to a named effort level when the model supports reasoning effort (o-series, claude-3-5+).
-- `custom_openai` / `custom_anthropic` chat providers: `build_chat_llm()` reads `CUSTOM_OPENAI_BASE_URL` / `CUSTOM_OPENAI_API_KEY` (and Anthropic equivalents) directly from env — these are NOT in `DEFAULT_CONFIG`.
-- Report directory layout written by `save_report_to_disk()`: `./reports/{safe_ticker}/{YYYYMMDD_HHMMSS}/{reports/{1_analysts,2_research,3_trading,4_risk,5_portfolio},run_manifest.json,message_tool.log}`. Anchor is `Path.cwd() / "reports"` via `get_reports_dir()` in `cli/chat/manifest.py` — strictly cwd, no walk-up. Same-second reruns get `_2`, `_3` suffix via `_next_available_dir()`. `find_report_dir(root, ticker, date)` filters by `manifest["analysis_date"]` and returns the latest matching timestamp.
-- Session JSONL: header line (type=header) + message lines (type=msg). `_repair_incomplete_tool_calls()` validates tool_call ids on load; if any expected id is missing, the whole turn is dropped.
-- `_build_chat_kwargs()` in `agent.py`: falls back to the provider's canonical env var (e.g. `OPENAI_API_KEY`) when `config["llm_api_key"]` is absent — `setup_chat_llm_interactive()` populates `llm_api_key` as the primary path; env fallback is the safety net.
-- REPL slash commands (`cli/chat/repl.py::_handle_slash`): `/help` `/tools` `/lang [LANG]` `/model` `/sessions` `/new [title]` `/title <name>` `/delete` `/exit`. `/lang` and `/model` rebuild the compiled graph via `rebuild_app_graph()` (`cli/chat/agent.py`); session-switching commands (`/sessions /new /title /delete`) only swap the JSONL and reload `state_messages` (no graph rebuild — same report, same tools, same model). `app_graph` is held in a single-element list (`app_graph_ref`) so the dispatcher can swap it; `session_path` similarly held in `session_path_ref`. `state_messages` is mutated via `.clear()` + `.extend(load_messages(...))` to preserve closure references. REPL maintains all message history itself, so rebuilds are lossless. Unknown `/...` commands print a hint and do NOT forward to the LLM.
-- `/model` calls `setup_chat_llm_interactive(config, force_interactive=True)` to bypass the env-key fast-path that the initial-startup call uses; without this, env-configured providers skip the menu entirely.
-- Sessions: multi-session per report. File layout `{report_dir}/sessions/{YYYYMMDD-HHMMSS}-{slug}.jsonl`. Startup picks `latest_session_path(report_dir)` (mtime sort), creating a new `default` session if none exist. Old `default.jsonl` (no timestamp prefix) loads via the same mtime sort; `rename_session_file()` prepends a fresh timestamp on first rename if the existing prefix doesn't parse as `%Y%m%d-%H%M%S`. `rewrite_header()` writes atomically via `.tmp` + `os.replace`.
 
 ## Development Hygiene
 
