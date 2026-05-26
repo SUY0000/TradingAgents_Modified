@@ -168,12 +168,13 @@ OKX endpoint quirks (learned the hard way during this revamp):
 - `_okx_request()` retries network errors and rate-limit code `50011`; per-function rate-limiter does not coordinate across different rubik endpoints.
 
 Auth-gated OKX endpoints that LOOK public but aren't (do not wire without HMAC auth):
-- `/public/economic-calendar` returns `50103 OK-ACCESS-KEY required`; no tool is currently exposed for it.
-- `/finance/savings/public-borrow-info` returns 403 without auth; no fundamentals tool is currently exposed for it.
+- `/public/economic-calendar` returns `50103 OK-ACCESS-KEY required`.
+- `/finance/savings/public-borrow-info` returns 403 without auth.
+These were discovered during endpoint exploration; no stubs exist for them in the codebase.
 
 CCXT:
 - CCXT cache key does not include exchange name; clear cache when switching `ccxt_exchange`.
-- CCXT vendor only handles `get_stock_data` and `get_indicators`; all crypto news/fundamentals/sentiment go through the dedicated vendors above.
+- CCXT vendor only handles `get_stock_data` and `get_indicators` (registered as `get_ccxt_stock_data` / `get_ccxt_indicators`); all crypto news/fundamentals/sentiment go through the dedicated vendors above.
 
 ENV:
 - `COINGECKO_DEMO_API_KEY` — optional; missing → anonymous public endpoint (stricter IP throttling).
@@ -368,7 +369,243 @@ rebuilds the graph with the new language instruction.
 - Prefer minimal, focused edits; avoid formatting churn because this branch rebases against upstream.
 - `DEFAULT_CONFIG.copy()` is a shallow copy — nested `data_vendors` dict is shared. Always use `copy.deepcopy(DEFAULT_CONFIG)` before mutating vendor keys.
 - When adding analyst tools, update both `llm.bind_tools(tools)` and `TradingAgentsGraph._create_tool_nodes()` unless the agent is intentionally no-ToolNode like Sentiment.
-- When an OKX endpoint turns out to require auth, prefer a graceful stub (placeholder string) over removing the function — leaves the door open for HMAC-signed wiring later. Document the stub at the function docstring AND in this file's OKX section.
+- When an OKX endpoint turns out to require auth, prefer a graceful stub (placeholder string) over removing the function — leaves the door open for HMAC-signed wiring later. Document the stub at the function docstring AND in this file's OKX section. (Two endpoints discovered as auth-gated — `/public/economic-calendar` and `/finance/savings/public-borrow-info` — were never stubbed; this rule was adopted after those were found.)
 - Use `git diff --check` before committing prompt/doc rewrites.
 - After editing custom provider headers or model discovery, run `python -m pytest tests/test_headers_env.py tests/test_custom_model_discovery.py -v`.
 - Commit only explicit source/doc files; leave `.DS_Store`, `plan/`, and build-worktree `reports/` untracked unless the user explicitly asks otherwise.
+
+---
+
+## Upstream Merge Guide
+
+Base: upstream `v0.2.5` (TauricResearch/TradingAgents@`a5cb7cb`). 50 commits, 85 files changed (+8773/-464).
+
+When merging from upstream, the following areas have local modifications. Use this as a
+conflict-resolution checklist — each section lists what we changed and which files are
+affected.
+
+### 1. A-Share / Chinese Market Support
+
+New data vendors and tools for Chinese stocks (SSE/SZSE/BSE). No counterpart in upstream.
+
+**New files** (no merge risk — upstream won't touch these):
+```
+tradingagents/dataflows/akshare_common.py      # shared AkShare HTTP helpers
+tradingagents/dataflows/akshare_data.py         # AkShare market + fundamentals vendor
+tradingagents/agents/utils/cn_market_tools.py   # A-share market tools (limit status, margin, concept board)
+tradingagents/agents/utils/cn_sentiment_tools.py # retail hot-rank, sell-side research, buy-side visits
+```
+
+**Modified files** (merge risk — upstream may touch these):
+```
+tradingagents/dataflows/interface.py            # register_*() calls for akshare + cn_sentiment_data routes
+tradingagents/default_config.py                 # cn_market_data, cn_sentiment_data vendor keys
+tradingagents/agents/utils/agent_utils.py       # get_asset_type() A-share detection, asset_prompt_context
+tradingagents/graph/trading_graph.py            # ToolNode wiring for cn_market/cn_sentiment tools
+tradingagents/agents/analysts/sentiment_analyst.py   # A-share pre-fetch branch
+tradingagents/agents/analysts/fundamentals_analyst.py # A-share extended fundamentals tools
+cli/main.py                                     # a_share CLI config preset
+```
+
+### 2. Crypto Analyst Revamp
+
+Replaced upstream's paid CryptoPanic + basic CCXT with free/open data stack. This is the
+largest single change.
+
+**New files** (no merge risk):
+```
+tradingagents/dataflows/okx_data.py             # OKX v5 REST (rubik + public + market)
+tradingagents/dataflows/okx_common.py           # shared OKX HTTP helpers
+tradingagents/dataflows/ccxt_data.py            # CCXT OHLCV + technical indicators (file-based cache)
+tradingagents/dataflows/coingecko_data.py       # CoinGecko /coins/{id}
+tradingagents/dataflows/defillama_data.py       # DeFiLlama protocol TVL + fees
+tradingagents/dataflows/alternative_me_data.py  # Fear & Greed Index
+tradingagents/dataflows/free_crypto_news_data.py # RSS-based free crypto news
+tradingagents/dataflows/crypto_symbols.py       # CCXT ↔ display ticker mapping
+tradingagents/agents/utils/crypto_market_tools.py    # 12 OKX market tools
+tradingagents/agents/utils/crypto_news_tools.py      # crypto news tools
+tradingagents/agents/utils/crypto_fundamental_tools.py # token profile + protocol metrics
+tradingagents/agents/utils/crypto_sentiment_tools.py  # smart money / margin (defined but not wired)
+```
+
+**Modified files** (merge risk):
+```
+tradingagents/dataflows/interface.py            # register_*() for all new crypto vendors
+tradingagents/default_config.py                 # crypto_market_data, crypto_news, crypto_fundamentals keys
+tradingagents/graph/trading_graph.py            # ToolNode wiring for crypto tools
+tradingagents/graph/setup.py                    # graph edge adjustments for crypto
+tradingagents/llm_clients/factory.py            # CCXT cache key fix
+.env.example                                    # CRYPTOPANIC_API_KEY removed, COINGECKO_DEMO_API_KEY added
+```
+
+**Key design decisions** (do not regress):
+- Single ticker source: `ccxt_symbol` (e.g. `BTC/USDT`) → `ccxt_to_base()` → all vendor lookups.
+  Upstream had dual yfinance + CCXT input; we removed yfinance for crypto (`7361e60`).
+- `crypto_symbols.py` is the single ticker conversion source; do not parse tickers ad-hoc.
+- CoinGecko `DEMO_API_KEY` is optional; anonymous falls back to public endpoint.
+- OKX public endpoints only (no HMAC auth); two stubbed endpoints documented in code.
+- DeFiLlama current TVL must be pulled from historical array's last element.
+
+### 3. Prompt Refactoring — Asset-Specific Splits
+
+Every agent prompt was split into stock / A-share / crypto branches. This touches all 10
+agent files. Upstream changes to prompts will conflict heavily.
+
+**Modified files** (HIGH merge risk — core agent logic):
+```
+tradingagents/agents/analysts/market_analyst.py
+tradingagents/agents/analysts/news_analyst.py
+tradingagents/agents/analysts/sentiment_analyst.py
+tradingagents/agents/analysts/fundamentals_analyst.py
+tradingagents/agents/researchers/bull_researcher.py
+tradingagents/agents/researchers/bear_researcher.py
+tradingagents/agents/managers/research_manager.py
+tradingagents/agents/managers/portfolio_manager.py
+tradingagents/agents/trader/trader.py
+tradingagents/agents/risk_mgmt/aggressive_debator.py
+tradingagents/agents/risk_mgmt/conservative_debator.py
+tradingagents/agents/risk_mgmt/neutral_debator.py
+tradingagents/agents/utils/agent_utils.py       # get_asset_type(), get_asset_prompt_context(), language instruction
+```
+
+**Merge strategy**: If upstream changes a prompt, apply the same change to all three
+branches (stock / A-share / crypto) within that agent. The `_build_*_system_message()`
+pattern is consistent across agents.
+
+### 4. LLM / Provider Enhancements
+
+**New files** (no merge risk):
+```
+tradingagents/llm_clients/custom_model_discovery.py  # /models endpoint fetching
+tradingagents/llm_clients/headers_env.py              # CUSTOM_*_HEADERS JSON parsing
+```
+
+**Modified files** (merge risk):
+```
+tradingagents/llm_clients/openai_client.py       # custom provider headers, DeepSeek thinking
+tradingagents/llm_clients/anthropic_client.py     # custom provider headers
+tradingagents/llm_clients/factory.py              # provider routing, custom provider model selection
+tradingagents/llm_clients/validators.py           # expanded effort options
+tradingagents/default_config.py                   # per-role quick/deep effort split
+cli/main.py                                       # custom provider CLI flow
+cli/utils.py                                      # select_custom_provider_model()
+```
+
+**Key changes**:
+- Effort split into `quick_llm_effort` / `deep_llm_effort` (was single `llm_effort`)
+- `custom_openai` / `custom_anthropic` support `CUSTOM_*_BASE_URL`, `CUSTOM_*_API_KEY`, `CUSTOM_*_HEADERS`
+- DeepSeek supports `reasoning_effort` and `thinking_enabled` via `extra_body`
+- Custom model discovery tolerates `{data: [...]}`, `{models: [...]}`, `[...]`, and empty responses
+- `ChatOpenAI` / `ChatAnthropic` constructors pass `default_headers` from env
+- **`**kwargs` added to all legacy vendor functions** (10 files) for LangChain tool-calling compatibility. Affected files:
+
+  ```
+  tradingagents/dataflows/alpha_vantage_fundamentals.py   # +**kwargs on 4 functions
+  tradingagents/dataflows/alpha_vantage_indicator.py      # +**kwargs
+  tradingagents/dataflows/alpha_vantage_news.py           # +**kwargs on 3 functions
+  tradingagents/dataflows/alpha_vantage_stock.py          # +**kwargs
+  tradingagents/dataflows/y_finance.py                    # +**kwargs on 7 functions
+  tradingagents/dataflows/yfinance_news.py                # +**kwargs on 2 functions
+  tradingagents/agents/utils/core_stock_tools.py          # +timeframe, +**kwargs
+  tradingagents/agents/utils/fundamental_data_tools.py    # +3 A-share tools, +**kwargs
+  tradingagents/agents/utils/news_data_tools.py           # +ticker param, +**kwargs
+  tradingagents/agents/utils/technical_indicators_tools.py # +timeframe, comma-sep support
+  ```
+
+  If upstream changes function signatures in these files, preserve the `**kwargs` and
+  our extra parameters (`timeframe`, `ticker`).
+
+### 5. Chat Replay Feature (`tradingagents chat`)
+
+Entirely new subcommand. No upstream counterpart.
+
+**New files** (no merge risk):
+```
+cli/chat/__init__.py        # package
+cli/chat/manifest.py        # run_manifest.json read/write, safe_ticker, report dir helpers
+cli/chat/browser.py         # interactive report picker (questionary)
+cli/chat/llm_setup.py       # interactive LLM provider/model/effort/key selection
+cli/chat/session.py         # multi-session JSONL persistence
+cli/chat/prompt.py          # system prompt builder (injects full report context)
+cli/chat/agent.py           # LangGraph sub-graph, chat LLM construction, rebuild_app_graph
+cli/chat/repl.py            # prompt_toolkit REPL loop, slash command dispatcher
+```
+
+**Modified files** (merge risk):
+```
+cli/main.py                                   # chat subcommand registration
+tradingagents/default_config.py               # chat_llm_provider/model/effort config triple
+tradingagents/agents/utils/agent_utils.py     # Toolkit class, get_all_tools_for_asset_type()
+```
+
+**Key design decisions**:
+- Chat uses a **single** LLM triple (no quick/deep split): `chat_llm_provider/model/effort`
+- `/model` persists to `{cwd}/.env` via `dotenv.set_key`; reuses `deep` model pool
+- Report output unified under `./reports/{safe_ticker}/{YYYYMMDD_HHMMSS}/`
+- Multi-session JSONL files under `{report_dir}/sessions/`
+- `safe_ticker()` converts `/` `\` `:` to `_`; same-second reruns get `_2`, `_3` suffix
+
+### 6. Bug Fixes & Hardening (scattered)
+
+These are small, localized changes unlikely to cause merge issues, but note them:
+
+```
+tradingagents/dataflows/utils.py               # get_global_news ticker type annotation fix
+tradingagents/dataflows/interface.py           # questionary Choice(None) fix
+tradingagents/graph/trading_graph.py           # sentiment analyst graph alignment, config deepcopy
+```
+
+### 7. Housekeeping
+
+```
+cli/main.py                         # splash screen rebranded for fork
+.env.example                        # removed CRYPTOPANIC_API_KEY, added new keys
+pyproject.toml                      # dependency additions (akshare, ccxt, questionary, prompt_toolkit, rich, dotenv)
+```
+
+### 8. Tests
+
+New test infrastructure (no upstream tests existed):
+```
+pytest.ini
+tests/conftest.py
+tests/__init__.py
+tests/TESTING_STRATEGY.md
+tests/test_headers_env.py
+tests/test_custom_model_discovery.py
+tests/test_custom_llm_providers.py
+tests/test_akshare_smoke.py
+tests/test_safe_ticker_component.py
+tests/unit/__init__.py
+tests/unit/dataflows/__init__.py
+tests/unit/dataflows/test_crypto_revamp_regressions.py
+tests/unit/dataflows/test_ccxt_data_template.py
+tests/unit/utils/__init__.py
+tests/fixtures/__init__.py
+tests/fixtures/mock_ccxt.py
+tests/fixtures/test_data.py
+tests/integration/__init__.py
+tests/integration/test_ccxt_integration_template.py
+tests/performance/__init__.py
+tests/performance/test_ccxt_performance_template.py
+tests/compatibility/__init__.py
+```
+
+### Merge Procedure
+
+1. `git fetch upstream && git merge upstream/main --no-commit --no-ff`
+2. Resolve conflicts by category (use the lists above to identify what each side changed):
+   - **New files** (our additions): never conflict; no action needed.
+   - **Agent prompts** (Section 3): if upstream changed a prompt, apply the same change to
+     all three asset branches in that file.
+   - **`default_config.py`**: if upstream added config keys, merge them alongside our new keys.
+   - **`interface.py`**: if upstream added vendor routes, register them alongside ours.
+   - **`trading_graph.py` / `setup.py`**: if upstream changed graph structure, adapt our
+     ToolNode registrations and edge wiring.
+   - **`cli/main.py`**: if upstream changed the Typer app, preserve our `chat` subcommand
+     and custom provider flow.
+   - **`agent_utils.py`**: if upstream added helpers, keep our `Toolkit`, `get_asset_type()`,
+     `get_asset_prompt_context()`, and `get_all_tools_for_asset_type()`.
+3. After resolving, run the prompt/graph smoke test with a dummy LLM for stock, A-share,
+   and crypto configs to catch wiring errors.
+4. `git commit` then `pip install -e .` in the build worktree.
