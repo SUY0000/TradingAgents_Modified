@@ -21,6 +21,36 @@ def _format_args_summary(args: dict, max_len: int = 80) -> str:
     return text[:max_len] + "…" if len(text) > max_len else text
 
 
+_MAX_HISTORY_LINES = 20
+
+
+def _print_history(messages: list) -> None:
+    """Print a compact summary of loaded messages so the user can see context."""
+    if not messages:
+        return
+    total = len(messages)
+    shown = messages[-_MAX_HISTORY_LINES:] if total > _MAX_HISTORY_LINES else messages
+    if total > _MAX_HISTORY_LINES:
+        console.print(f"[dim]… {total - _MAX_HISTORY_LINES} earlier messages omitted[/dim]")
+    for m in shown:
+        if isinstance(m, HumanMessage):
+            text = (m.content or "").strip().split("\n")[0][:120]
+            console.print(f"  [bold cyan]>[/bold cyan] {text}")
+        elif isinstance(m, AIMessage):
+            content = m.content if isinstance(m.content, str) else ""
+            text = content.strip().split("\n")[0][:120]
+            console.print(f"  [bold green]●[/bold green] {text}")
+            if m.tool_calls:
+                for tc in m.tool_calls:
+                    args_summary = _format_args_summary(tc.get("args", {}))
+                    console.print(f"    [cyan]⏺ {tc['name']}({args_summary})[/cyan]")
+        elif isinstance(m, ToolMessage):
+            content = m.content or ""
+            preview = content[:80] + ("…" if len(content) > 80 else "")
+            console.print(f"    [dim]└─ {len(content)} chars: {preview}[/dim]")
+    console.print(Rule(style="dim"))
+
+
 def _count_session_tokens(messages: list) -> int:
     """Rough token estimate: 1 token ≈ 4 chars."""
     total = sum(len(str(getattr(m, "content", ""))) for m in messages)
@@ -228,6 +258,8 @@ def _handle_slash(
         state_messages.clear()
         state_messages.extend(load_messages(new_path))
         console.print(f"[green]Switched to session:[/green] {new_path.name} ({len(state_messages)} msgs loaded)")
+        _print_header(manifest, session_path_ref[0], config, len(state_messages))
+        _print_history(state_messages)
         return "continue"
 
     if cmd == "/new":
@@ -281,6 +313,8 @@ def _handle_slash(
             state_messages.clear()
             console.print(f"[green]All sessions deleted. Created:[/green] {new_path.name}")
         session_path_ref[0] = new_path
+        _print_header(manifest, session_path_ref[0], config, len(state_messages))
+        _print_history(state_messages)
         return "continue"
 
     return "unknown"
