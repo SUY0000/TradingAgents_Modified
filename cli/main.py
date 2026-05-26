@@ -1,4 +1,3 @@
-from typing import Optional
 import copy
 import datetime
 import typer
@@ -33,7 +32,7 @@ console = Console()
 app = typer.Typer(
     name="TradingAgents",
     help="TradingAgents CLI: Multi-Agents LLM Financial Trading Framework",
-    add_completion=True,  # Enable shell completion
+    add_completion=False,
 )
 
 
@@ -1326,9 +1325,7 @@ def run_analysis(checkpoint: bool = False):
             final_state=final_state,
         )
         console.print(
-            f"[dim]💬 启动 `tradingagents chat` 选择本次报告与 agent 复盘[/dim]\n"
-            f"[dim]   或直接运行 `tradingagents chat --ticker {selections['ticker']} "
-            f"--date {selections['analysis_date']}`[/dim]"
+            "[dim]💬 启动 `tradingagents chat` 选择本次报告与 agent 复盘[/dim]"
         )
     except Exception as _e:
         console.print(f"[dim]manifest write skipped: {_e}[/dim]")
@@ -1364,12 +1361,7 @@ def analyze(
 
 
 @app.command()
-def chat(
-    ticker: Optional[str] = typer.Option(None, "--ticker", "-t",
-        help="标的（可选，未提供时进入浏览器）"),
-    date: Optional[str] = typer.Option(None, "--date", "-d",
-        help="报告日期 YYYY-MM-DD（可选）"),
-):
+def chat():
     """对历史报告进行回溯对话。"""
     import datetime as _dt
     import copy
@@ -1377,32 +1369,22 @@ def chat(
     from tradingagents.dataflows.config import set_config
     from tradingagents.agents.utils.agent_utils import Toolkit
     from cli.chat.manifest import (
-        find_report_dir, load_manifest, load_reports, apply_manifest_to_config,
+        load_manifest, load_reports, apply_manifest_to_config,
         get_reports_dir as _get_reports_dir,
     )
     from cli.chat.browser import pick_report
     from cli.chat.llm_setup import setup_chat_llm_interactive
-    from cli.chat.session import default_session_path, ensure_session, latest_session_path, make_session_path
+    from cli.chat.session import ensure_session, latest_session_path, make_session_path
     from cli.chat.agent import build_chat_llm, build_chat_app, load_past_context, rebuild_app_graph
     from cli.chat.repl import run_repl
 
     config = copy.deepcopy(DEFAULT_CONFIG)
 
-    # 1. 定位 report_dir
-    if ticker and date:
-        try:
-            report_dir = find_report_dir(_get_reports_dir(), ticker, date)
-        except FileNotFoundError as e:
-            console.print(f"[red]{e}[/red]")
-            raise typer.Exit(1)
-    elif ticker or date:
-        console.print("[red]--ticker 与 --date 需同时提供[/red]")
-        raise typer.Exit(2)
-    else:
-        report_dir = pick_report(_get_reports_dir())
-        if report_dir is None:
-            console.print("[yellow]已取消[/yellow]")
-            raise typer.Exit(0)
+    # 1. 定位 report_dir（始终走浏览器）
+    report_dir = pick_report(_get_reports_dir())
+    if report_dir is None:
+        console.print("[yellow]已取消[/yellow]")
+        raise typer.Exit(0)
 
     # 2. 加载 manifest + reports
     try:

@@ -7,7 +7,9 @@ of separate quick/deep tuples.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
+from dotenv import find_dotenv, set_key
 from rich.console import Console
 
 from tradingagents.llm_clients.api_key_env import get_api_key_env
@@ -25,6 +27,20 @@ def _env_key_for_provider(provider: str) -> str | None:
     if env_var:
         return os.environ.get(env_var)
     return None  # ollama / unknown — no key needed
+
+
+def _persist_chat_llm_to_env(provider: str, model: str, effort: str) -> None:
+    """Persist the chat LLM triple to {cwd}/.env via dotenv.set_key.
+
+    Mirrors how ensure_api_key() saves API keys, so /model selections
+    survive across chat invocations. set_key creates .env if missing.
+    """
+    env_path = find_dotenv(usecwd=True) or str(Path.cwd() / ".env")
+    Path(env_path).touch(exist_ok=True)
+    set_key(env_path, "TRADINGAGENTS_CHAT_LLM_PROVIDER", provider)
+    set_key(env_path, "TRADINGAGENTS_CHAT_LLM_MODEL", model)
+    set_key(env_path, "TRADINGAGENTS_CHAT_LLM_EFFORT", effort or "default")
+    console.print(f"[dim]Saved chat LLM selection to {env_path}[/dim]")
 
 
 def setup_chat_llm_interactive(config: dict, force_interactive: bool = False) -> dict:
@@ -116,5 +132,7 @@ def setup_chat_llm_interactive(config: dict, force_interactive: bool = False) ->
         config["backend_url"] = backend_url
     if key:
         config["llm_api_key"] = key
+
+    _persist_chat_llm_to_env(provider, model, effort)
 
     return config
