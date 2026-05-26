@@ -110,8 +110,8 @@ def setup_chat_llm_interactive(config: dict, force_interactive: bool = False) ->
     else:
         key = ensure_api_key(provider)
 
-    # Select model
-    model = _select_model(provider, "chat")
+    # Select model (chat reuses the deep pool — chat is reasoning-heavy by nature)
+    model = _select_model(provider, "deep")
 
     # Select effort (provider-specific)
     provider_lower = provider.lower()
