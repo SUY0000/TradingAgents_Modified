@@ -21,6 +21,9 @@ _ENV_OVERRIDES = {
     "TRADINGAGENTS_DEEP_DEEPSEEK_REASONING_EFFORT":  "deep_deepseek_reasoning_effort",
     "TRADINGAGENTS_QUICK_DEEPSEEK_THINKING_ENABLED": "quick_deepseek_thinking_enabled",
     "TRADINGAGENTS_DEEP_DEEPSEEK_THINKING_ENABLED":  "deep_deepseek_thinking_enabled",
+    "TRADINGAGENTS_CHAT_LLM_PROVIDER":               "chat_llm_provider",
+    "TRADINGAGENTS_CHAT_LLM_MODEL":                  "chat_llm_model",
+    "TRADINGAGENTS_CHAT_LLM_EFFORT":                 "chat_llm_effort",
 }
 
 
@@ -68,6 +71,10 @@ DEFAULT_CONFIG = _apply_env_overrides({
     # provider-specific URL here would leak (e.g. OpenAI's /v1 was previously
     # being forwarded to Gemini, producing malformed request URLs).
     "backend_url": None,
+    # Chat sub-command LLM settings
+    "chat_llm_provider": "openai",
+    "chat_llm_model":    "gpt-4o",
+    "chat_llm_effort":   "high",
     # Provider-specific thinking configuration (separate for quick and deep models)
     "quick_google_thinking_level": None,      # "high", "minimal", etc.
     "deep_google_thinking_level": None,
