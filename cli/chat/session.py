@@ -11,6 +11,22 @@ from pathlib import Path
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 
+def _content_to_text(content) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict) and item.get("type") in (None, "text", "output_text"):
+                text = item.get("text") or item.get("content")
+                if isinstance(text, str):
+                    parts.append(text)
+        return "\n".join(parts)
+    return str(content) if content is not None else ""
+
+
 def default_session_path(report_dir: Path) -> Path:
     return Path(report_dir) / "sessions" / "default.jsonl"
 
@@ -164,34 +180,42 @@ def load_messages(session_path: Path) -> list:
                 raw_msgs.append(d)
 
     messages = [jsonl_to_msg(d) for d in raw_msgs]
-    return _repair_incomplete_tool_calls(messages)
+    return _drop_trailing_incomplete_tool_turn(messages)
 
 
-def _repair_incomplete_tool_calls(messages: list) -> list:
-    """Drop the trailing user turn if its tool_calls are missing tool results."""
-    for ai_idx in range(len(messages) - 1, -1, -1):
-        ai_msg = messages[ai_idx]
-        if not isinstance(ai_msg, AIMessage) or not getattr(ai_msg, "tool_calls", None):
-            continue
+def _drop_trailing_incomplete_tool_turn(messages: list) -> list:
+    """Drop only a final interrupted turn whose last AI tool call lacks tool results."""
+    if not messages:
+        return messages
 
-        expected_ids = {tc.get("id") for tc in ai_msg.tool_calls if tc.get("id")}
-        following = messages[ai_idx + 1:]
-        actual_ids = {
-            msg.tool_call_id
-            for msg in following
-            if isinstance(msg, ToolMessage) and getattr(msg, "tool_call_id", None)
-        }
-        if expected_ids and expected_ids.issubset(actual_ids):
-            return messages
+    last_ai_idx = None
+    for idx in range(len(messages) - 1, -1, -1):
+        if isinstance(messages[idx], AIMessage):
+            last_ai_idx = idx
+            break
+    if last_ai_idx is None:
+        return messages
 
-        cut_idx = ai_idx
-        for idx in range(ai_idx - 1, -1, -1):
-            if isinstance(messages[idx], HumanMessage):
-                cut_idx = idx
-                break
-        return messages[:cut_idx]
+    ai_msg = messages[last_ai_idx]
+    expected_ids = {tc.get("id") for tc in getattr(ai_msg, "tool_calls", []) if tc.get("id")}
+    if not expected_ids:
+        return messages
 
-    return messages
+    following = messages[last_ai_idx + 1:]
+    actual_ids = {
+        msg.tool_call_id
+        for msg in following
+        if isinstance(msg, ToolMessage) and getattr(msg, "tool_call_id", None)
+    }
+    if expected_ids.issubset(actual_ids):
+        return messages
+
+    cut_idx = last_ai_idx
+    for idx in range(last_ai_idx - 1, -1, -1):
+        if isinstance(messages[idx], HumanMessage):
+            cut_idx = idx
+            break
+    return messages[:cut_idx]
 
 
 def append_message(session_path: Path, msg: dict) -> None:
@@ -216,7 +240,7 @@ def msg_to_jsonl(message, model: str = "", effort: str = "") -> dict:
     """Convert a LangChain BaseMessage to a JSONL dict."""
     ts = datetime.now(tz=timezone.utc).isoformat()
     if isinstance(message, HumanMessage):
-        return {"type": "msg", "role": "user", "ts": ts, "content": message.content}
+        return {"type": "msg", "role": "user", "ts": ts, "content": _content_to_text(message.content)}
     if isinstance(message, AIMessage):
         d = {
             "type": "msg",
@@ -224,7 +248,7 @@ def msg_to_jsonl(message, model: str = "", effort: str = "") -> dict:
             "ts": ts,
             "model": model,
             "effort": effort,
-            "content": message.content if isinstance(message.content, str) else "",
+            "content": _content_to_text(message.content),
         }
         if message.tool_calls:
             d["tool_calls"] = [
@@ -239,10 +263,10 @@ def msg_to_jsonl(message, model: str = "", effort: str = "") -> dict:
             "ts": ts,
             "tool_call_id": message.tool_call_id,
             "name": getattr(message, "name", ""),
-            "content": message.content if isinstance(message.content, str) else str(message.content),
+            "content": _content_to_text(message.content),
         }
     # Fallback for other message types
-    return {"type": "msg", "role": "unknown", "ts": ts, "content": str(message.content)}
+    return {"type": "msg", "role": "unknown", "ts": ts, "content": _content_to_text(message.content)}
 
 
 def jsonl_to_msg(d: dict):

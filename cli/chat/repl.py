@@ -13,6 +13,22 @@ from rich.table import Table
 
 from cli.chat.session import append_message, load_messages, msg_to_jsonl, truncate_last_message
 
+
+def _content_to_text(content) -> str:
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, str):
+                parts.append(item)
+            elif isinstance(item, dict) and item.get("type") in (None, "text", "output_text"):
+                text = item.get("text") or item.get("content")
+                if isinstance(text, str):
+                    parts.append(text)
+        return "\n".join(parts)
+    return str(content) if content is not None else ""
+
 console = Console()
 
 
@@ -21,33 +37,42 @@ def _format_args_summary(args: dict, max_len: int = 80) -> str:
     return text[:max_len] + "…" if len(text) > max_len else text
 
 
-_MAX_HISTORY_LINES = 20
+def _preview_text(content: str, max_len: int = 120) -> str:
+    text = content.strip().split("\n")[0]
+    return text[:max_len] + ("…" if len(text) > max_len else "")
+
+
+def _history_rows(messages: list) -> list[tuple[str, str]]:
+    rows = []
+    for m in messages:
+        if isinstance(m, HumanMessage):
+            rows.append(("user", _preview_text(_content_to_text(m.content))))
+        elif isinstance(m, AIMessage):
+            content = _content_to_text(m.content)
+            rows.append(("assistant", _preview_text(content)))
+            for tc in getattr(m, "tool_calls", []) or []:
+                args_summary = _format_args_summary(tc.get("args", {}))
+                rows.append(("tool_call", f"{tc['name']}({args_summary})"))
+        elif isinstance(m, ToolMessage):
+            content = _content_to_text(m.content)
+            rows.append(("tool", f"{len(content)} chars: {_preview_text(content, 80)}"))
+    return rows
 
 
 def _print_history(messages: list) -> None:
-    """Print a compact summary of loaded messages so the user can see context."""
-    if not messages:
+    """Print all loaded messages in raw session order."""
+    rows = _history_rows(messages)
+    if not rows:
         return
-    total = len(messages)
-    shown = messages[-_MAX_HISTORY_LINES:] if total > _MAX_HISTORY_LINES else messages
-    if total > _MAX_HISTORY_LINES:
-        console.print(f"[dim]… {total - _MAX_HISTORY_LINES} earlier messages omitted[/dim]")
-    for m in shown:
-        if isinstance(m, HumanMessage):
-            text = (m.content or "").strip().split("\n")[0][:120]
+    for role, text in rows:
+        if role == "user":
             console.print(f"  [bold cyan]>[/bold cyan] {text}")
-        elif isinstance(m, AIMessage):
-            content = m.content if isinstance(m.content, str) else ""
-            text = content.strip().split("\n")[0][:120]
+        elif role == "assistant":
             console.print(f"  [bold green]●[/bold green] {text}")
-            if m.tool_calls:
-                for tc in m.tool_calls:
-                    args_summary = _format_args_summary(tc.get("args", {}))
-                    console.print(f"    [cyan]⏺ {tc['name']}({args_summary})[/cyan]")
-        elif isinstance(m, ToolMessage):
-            content = m.content or ""
-            preview = content[:80] + ("…" if len(content) > 80 else "")
-            console.print(f"    [dim]└─ {len(content)} chars: {preview}[/dim]")
+        elif role == "tool_call":
+            console.print(f"    [cyan]⏺ {text}[/cyan]")
+        elif role == "tool":
+            console.print(f"    [dim]└─ {text}[/dim]")
     console.print(Rule(style="dim"))
 
 
@@ -70,7 +95,7 @@ def stream_invoke(app_graph, state_messages: list, config: dict) -> list:
                 msgs_out = node_output.get("messages", [])
                 for msg in msgs_out:
                     if isinstance(msg, AIMessage):
-                        content = msg.content if isinstance(msg.content, str) else ""
+                        content = _content_to_text(msg.content)
                         if content:
                             console.print(Markdown(content))
                         if msg.tool_calls:
@@ -94,7 +119,7 @@ def stream_invoke(app_graph, state_messages: list, config: dict) -> list:
         result = app_graph.invoke({"messages": state_messages})
         for msg in result.get("messages", [])[len(state_messages):]:
             if isinstance(msg, AIMessage):
-                content = msg.content if isinstance(msg.content, str) else ""
+                content = _content_to_text(msg.content)
                 if content:
                     console.print(Markdown(content))
                 if msg.tool_calls:
