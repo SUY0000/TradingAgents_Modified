@@ -37,6 +37,12 @@ def _format_args_summary(args: dict, max_len: int = 80) -> str:
     return text[:max_len] + "…" if len(text) > max_len else text
 
 
+def _tool_result_summary(content: str, max_len: int = 160) -> str:
+    normalized = " ".join(content.split())
+    preview = normalized[:max_len] + ("…" if len(normalized) > max_len else "")
+    return f"{len(content)} chars: {preview}" if preview else "0 chars"
+
+
 def _history_rows(messages: list) -> list[tuple[str, str]]:
     rows = []
     for m in messages:
@@ -49,7 +55,7 @@ def _history_rows(messages: list) -> list[tuple[str, str]]:
                 args_summary = _format_args_summary(tc.get("args", {}), max_len=240)
                 rows.append(("tool_call", f"{tc['name']}({args_summary})"))
         elif isinstance(m, ToolMessage):
-            rows.append(("tool", _content_to_text(m.content).strip()))
+            rows.append(("tool", _tool_result_summary(_content_to_text(m.content))))
     return rows
 
 
@@ -67,8 +73,7 @@ def _print_history(messages: list) -> None:
         elif role == "tool_call":
             console.print(f"    [cyan]⏺ {text}[/cyan]")
         elif role == "tool":
-            console.print("    [dim]└─ tool result[/dim]")
-            console.print(text)
+            console.print(f"    [dim]└─ tool result: {text}[/dim]")
     console.print(Rule(style="dim"))
 
 

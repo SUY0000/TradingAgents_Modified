@@ -27,7 +27,7 @@ def test_session_history_shows_all_messages_after_tool_call(tmp_path: Path):
         ("user", "现在怎么看？"),
         ("assistant", ""),
         ("tool_call", "get_okx_ticker_snapshot(ticker='BTC/USDT')"),
-        ("tool", "BTC is up\nOI is down"),
+        ("tool", "20 chars: BTC is up OI is down"),
         ("assistant", "最终回复：仍需谨慎。\n第二行也要完整保留。"),
     ]
 
@@ -64,6 +64,6 @@ def test_session_repair_only_drops_trailing_incomplete_tool_turn(tmp_path: Path)
         ("user", "第一问"),
         ("assistant", ""),
         ("tool_call", "tool()"),
-        ("tool", "result"),
+        ("tool", "6 chars: result"),
         ("assistant", "第一答"),
     ]
