@@ -15,8 +15,8 @@ def test_session_history_shows_all_messages_after_tool_call(tmp_path: Path):
         content="",
         tool_calls=[{"id": "call-1", "name": "get_okx_ticker_snapshot", "args": {"ticker": "BTC/USDT"}}],
     )
-    tool_msg = ToolMessage(content="BTC is up", tool_call_id="call-1", name="get_okx_ticker_snapshot")
-    final_msg = AIMessage(content=[{"type": "text", "text": "最终回复：仍需谨慎。"}])
+    tool_msg = ToolMessage(content="BTC is up\nOI is down", tool_call_id="call-1", name="get_okx_ticker_snapshot")
+    final_msg = AIMessage(content=[{"type": "text", "text": "最终回复：仍需谨慎。\n第二行也要完整保留。"}])
 
     for msg in (user_msg, tool_call_msg, tool_msg, final_msg):
         append_message(session_path, msg_to_jsonl(msg))
@@ -27,8 +27,8 @@ def test_session_history_shows_all_messages_after_tool_call(tmp_path: Path):
         ("user", "现在怎么看？"),
         ("assistant", ""),
         ("tool_call", "get_okx_ticker_snapshot(ticker='BTC/USDT')"),
-        ("tool", "9 chars: BTC is up"),
-        ("assistant", "最终回复：仍需谨慎。"),
+        ("tool", "BTC is up\nOI is down"),
+        ("assistant", "最终回复：仍需谨慎。\n第二行也要完整保留。"),
     ]
 
 
@@ -64,6 +64,6 @@ def test_session_repair_only_drops_trailing_incomplete_tool_turn(tmp_path: Path)
         ("user", "第一问"),
         ("assistant", ""),
         ("tool_call", "tool()"),
-        ("tool", "6 chars: result"),
+        ("tool", "result"),
         ("assistant", "第一答"),
     ]

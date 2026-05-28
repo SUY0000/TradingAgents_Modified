@@ -37,25 +37,19 @@ def _format_args_summary(args: dict, max_len: int = 80) -> str:
     return text[:max_len] + "…" if len(text) > max_len else text
 
 
-def _preview_text(content: str, max_len: int = 120) -> str:
-    text = content.strip().split("\n")[0]
-    return text[:max_len] + ("…" if len(text) > max_len else "")
-
-
 def _history_rows(messages: list) -> list[tuple[str, str]]:
     rows = []
     for m in messages:
         if isinstance(m, HumanMessage):
-            rows.append(("user", _preview_text(_content_to_text(m.content))))
+            rows.append(("user", _content_to_text(m.content).strip()))
         elif isinstance(m, AIMessage):
-            content = _content_to_text(m.content)
-            rows.append(("assistant", _preview_text(content)))
+            content = _content_to_text(m.content).strip()
+            rows.append(("assistant", content))
             for tc in getattr(m, "tool_calls", []) or []:
-                args_summary = _format_args_summary(tc.get("args", {}))
+                args_summary = _format_args_summary(tc.get("args", {}), max_len=240)
                 rows.append(("tool_call", f"{tc['name']}({args_summary})"))
         elif isinstance(m, ToolMessage):
-            content = _content_to_text(m.content)
-            rows.append(("tool", f"{len(content)} chars: {_preview_text(content, 80)}"))
+            rows.append(("tool", _content_to_text(m.content).strip()))
     return rows
 
 
@@ -68,11 +62,13 @@ def _print_history(messages: list) -> None:
         if role == "user":
             console.print(f"  [bold cyan]>[/bold cyan] {text}")
         elif role == "assistant":
-            console.print(f"  [bold green]●[/bold green] {text}")
+            console.print("  [bold green]●[/bold green]")
+            console.print(Markdown(text) if text else "")
         elif role == "tool_call":
             console.print(f"    [cyan]⏺ {text}[/cyan]")
         elif role == "tool":
-            console.print(f"    [dim]└─ {text}[/dim]")
+            console.print("    [dim]└─ tool result[/dim]")
+            console.print(text)
     console.print(Rule(style="dim"))
 
 
