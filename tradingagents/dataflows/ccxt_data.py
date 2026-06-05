@@ -104,6 +104,10 @@ def _resolve_ccxt_symbol(symbol: str) -> str:
     return config.get("ccxt_symbol") or symbol
 
 
+def _get_env_proxy(name: str) -> str | None:
+    return os.environ.get(name) or os.environ.get(name.lower())
+
+
 def _get_exchange():
     """Create a CCXT exchange instance from config."""
     import ccxt
@@ -116,7 +120,18 @@ def _get_exchange():
             f"CCXT exchange '{exchange_id}' not found. "
             f"Install a version of ccxt that supports it."
         )
-    return exchange_class()
+
+    proxies = {}
+    all_proxy = _get_env_proxy("ALL_PROXY")
+    http_proxy = _get_env_proxy("HTTP_PROXY") or all_proxy
+    https_proxy = _get_env_proxy("HTTPS_PROXY") or all_proxy
+    if http_proxy:
+        proxies["http"] = http_proxy
+    if https_proxy:
+        proxies["https"] = https_proxy
+
+    exchange_options = {"proxies": proxies} if proxies else {}
+    return exchange_class(exchange_options)
 
 
 def _validate_timeframe(exchange, timeframe: str) -> str:
